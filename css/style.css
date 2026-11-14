@@ -187,10 +187,7 @@ legend { font-weight: 600; margin-bottom: .4rem; padding: 0; }
 .entete-rubrique { display: flex; align-items: flex-start; gap: .75rem; margin-bottom: 1rem; }
 .entete-rubrique h1 { flex: 1; margin: 0; }
 .retour { display: inline-block; margin-bottom: .5rem; text-decoration: none; font-size: .95rem; }
-.barre-envoi {
-  position: sticky; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 5; margin: 1rem -1rem 0; padding: .75rem 1rem;
-  background: rgba(245, 243, 238, .96); backdrop-filter: blur(6px); border-top: 1px solid var(--trait);
-}
+.barre-envoi { margin: 1rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--trait); }
 .etat-sauvegarde { font-size: .85rem; color: var(--encre-douce); margin: .4rem 0 0; text-align: center; min-height: 1.3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .manques { font-size: .88rem; color: #7a3d0e; margin: 0 0 .5rem; padding-left: 1.1rem; }
 .commentaire { border-left: 4px solid var(--accent); background: var(--accent-clair); border-radius: 0 10px 10px 0; padding: .6rem .8rem; margin-bottom: .5rem; }
@@ -267,7 +264,7 @@ legend { font-weight: 600; margin-bottom: .4rem; padding: 0; }
 .carte-eleve .alerte-ligne { font-size: .85rem; color: var(--rouge); margin: .15rem 0 0; }
 .carte-eleve .alerte-ligne.faible { color: #a4520f; }
 .carte-eleve.alerte { border-left: 4px solid var(--rouge); }
-.onglets { display: flex; gap: .25rem; overflow-x: auto; border-bottom: 1px solid var(--trait); margin-bottom: 1rem; }
+.onglets { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 1px solid var(--trait); margin-bottom: 1rem; }
 .onglets a { padding: .55rem .8rem; text-decoration: none; color: var(--encre-douce); white-space: nowrap; border-bottom: 3px solid transparent; font-weight: 600; font-size: .95rem; }
 .onglets a.actif { color: var(--primaire); border-color: var(--primaire); }
 .fiche-lecture dt { font-size: .8rem; color: var(--encre-douce); font-weight: 600; margin-top: .6rem; }
@@ -342,3 +339,29 @@ fieldset.concurrent legend { padding: 0 .35rem; }
 .mini-statuts { display: flex; flex-wrap: wrap; gap: .3rem .6rem; font-size: .82rem; margin: .5rem 0; }
 .mini-statuts span b { font-weight: 700; }
 .ms-vide { color: #9a948a; } .ms-brouillon { color: var(--bleu); } .ms-soumis { color: #a4520f; } .ms-revoir { color: var(--rouge); } .ms-valide { color: var(--vert); }
+
+/* Rubriques de fin */
+.grandes-cases label { padding: .35rem 0; font-size: 1rem; align-items: flex-start; }
+.grandes-cases input { margin-top: .2rem; flex: none; }
+.liste-check { list-style: none; padding: 0; margin: 0; }
+.liste-check li { padding: .25rem 0; }
+fieldset.attitude, fieldset.diapo-edit { border: 1px solid var(--trait); border-radius: 12px; padding: .75rem 1rem; margin-bottom: 1rem; }
+fieldset.attitude legend, fieldset.diapo-edit legend { padding: 0 .35rem; }
+.choix-petit label { min-width: 5rem; font-size: .82rem; padding: .45rem .3rem; }
+.diapo-edit input.point { margin-top: .4rem; }
+.diapos { display: grid; gap: .75rem; }
+.diapo { position: relative; aspect-ratio: 16 / 9; background: var(--primaire); color: #fff; border-radius: 12px; padding: 1rem 1.2rem; overflow: hidden; }
+.diapo h3 { color: #fff; font-size: 1.05rem; margin-bottom: .4rem; }
+.diapo ul { margin: 0; padding-left: 1.1rem; font-size: .85rem; }
+.diapo li { margin-bottom: .15rem; }
+.diapo-num { position: absolute; top: .6rem; right: .8rem; font-size: .7rem; opacity: .7; }
+.diapo-pied { position: absolute; bottom: .5rem; left: 1.2rem; font-size: .7rem; opacity: .75; }
+@media (min-width: 900px) { .diapos { grid-template-columns: 1fr 1fr; } }
+@media print {
+  body.imprime .diapos.impr { display: block; }
+  body.imprime .diapo { width: 100%; aspect-ratio: 16 / 9; page-break-after: always; break-after: page; border-radius: 0; padding: 48px 64px; background: #0f5f5b !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.imprime .diapo h3 { font-size: 34px; } body.imprime .diapo ul { font-size: 22px; } body.imprime .diapo-pied, body.imprime .diapo-num { font-size: 14px; }
+}
+.choix-petit { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+.choix-petit label { min-width: 0; }
+@media (min-width: 640px) { .choix-petit { grid-template-columns: repeat(4, 1fr); } }

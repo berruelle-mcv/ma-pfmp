@@ -1,5 +1,5 @@
 // Définition des rubriques du dossier (formulaires et lecture).
-import { esc, nbMots } from './ui.js';
+import { esc, nbMots, modale, imprimer, toast } from './ui.js';
 import { etat } from './app.js';
 import { get } from './api.js';
 
@@ -43,11 +43,17 @@ export const FICHE_IDENTITE = [
 ];
 
 export const QUESTIONS_INTRO = [
-  'Pourquoi as-tu choisi de faire ton stage dans cette entreprise ?',
-  'Est-ce un choix pratique ? (une personne de ton entourage y travaille, l’entreprise est proche de chez toi…)',
-  'Est-ce par curiosité, ou par intérêt pour ce métier ou cette entreprise ?',
-  'Est-ce pour voir autre chose ?',
-  'Tu peux remercier ton tuteur et l’ensemble du personnel.',
+  'Comment as-tu trouvé ton stage ? (candidatures, relations, aide du lycée… Dire que ça a été difficile est une vraie réponse.)',
+  'Que fait l’entreprise, en une phrase ?',
+  'Ta première impression, le premier jour : l’accueil, l’ambiance, ce qui t’a surpris.',
+  'Qu’aimerais-tu apprendre pendant ces quatre semaines ? Ou qu’est-ce qui t’inquiète ?',
+];
+
+export const AMORCES_INTRO = [
+  'J’effectue ma PFMP chez …, une entreprise qui …',
+  'J’ai trouvé ce stage grâce à …',
+  'Le premier jour, j’ai remarqué que …',
+  'Pendant ces quatre semaines, j’aimerais apprendre à …',
 ];
 
 function champHtml(c, valeur, lectureSeule) {
@@ -100,9 +106,11 @@ export function editeurIntroduction(zone, contenu, { lectureSeule, changer }) {
   zone.innerHTML = `
     <div class="carte"><h2>Questions pour t’aider</h2>
       <ul class="questions-guides">${QUESTIONS_INTRO.map((q) => `<li>${esc(q)}</li>`).join('')}</ul>
-      <p class="discret petit" style="margin-top:.5rem">Rédige un vrai texte de 5 à 10 lignes, sans recopier les questions.</p></div>
+      <p class="discret petit" style="margin:.75rem 0 .25rem"><b>Tu bloques ?</b> Pars de ces débuts de phrases et complète-les :</p>
+      <ul class="questions-guides">${AMORCES_INTRO.map((q) => `<li><i>${esc(q)}</i></li>`).join('')}</ul>
+      <p class="discret petit" style="margin-top:.5rem">Écris un vrai texte de 5 lignes au moins (10 au plus).</p></div>
     <label class="champ"><span class="lib">Mon introduction</span>
-      <textarea name="texte" rows="10" maxlength="3000"${lectureSeule ? ' disabled' : ''} placeholder="J’ai choisi d’effectuer ma PFMP chez…">${esc(contenu.texte || '')}</textarea>
+      <textarea name="texte" rows="10" maxlength="3000"${lectureSeule ? ' disabled' : ''} placeholder="J’effectue ma PFMP chez…">${esc(contenu.texte || '')}</textarea>
       <span class="aide" data-compteur></span></label>`;
   const ta = zone.querySelector('textarea');
   const compteur = zone.querySelector('[data-compteur]');
@@ -339,4 +347,189 @@ export function relectureHtml(r, { pourProf = false } = {}) {
     ${r.ameliorer && r.ameliorer.length ? `<p class="relecture-sous">🛠 À améliorer</p><ul>${r.ameliorer.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     ${r.question ? `<p class="relecture-sous">❓ Pour aller plus loin</p><p>${esc(r.question)}</p>` : ''}
   </div>`;
+}
+
+// ---------------------------------------------------------------- Check-list de semaine 4
+
+export function editeurChecklist(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  const items = etat.config.checklist;
+  zone.innerHTML = `
+    <div class="bandeau info"><p>✅ Ta dernière semaine en entreprise : vérifie que tu repars avec tout ce qu’il te faut pour finir ton dossier pendant les vacances.</p></div>
+    <form class="carte" novalidate>
+      <div class="cases grandes-cases">${items.map((t, i) => `<label><input type="checkbox" name="c${i}"${contenu.cases && contenu.cases[i] ? ' checked' : ''}${dis}> ${esc(t)}</label>`).join('')}</div>
+      <label class="champ" style="margin-top:1rem"><span class="lib">Ce qu’il me manque encore (facultatif)</span>
+        <textarea name="note" rows="2" maxlength="600"${dis} placeholder="ex. Je dois encore demander l’effectif exact.">${esc(contenu.note || '')}</textarea></label>
+    </form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => ({ cases: items.map((_, i) => form.elements[`c${i}`].checked), note: form.elements.note.value });
+  form.addEventListener('input', () => changer(lire()));
+  form.addEventListener('change', () => changer(lire()));
+  return { definirLectureSeule(v) { form.querySelectorAll('input, textarea').forEach((x) => { x.disabled = v; }); } };
+}
+
+export function lectureChecklist(c) {
+  return `<ul class="liste-check">${etat.config.checklist.map((t, i) => `<li>${c.cases && c.cases[i] ? '✅' : '⬜'} ${esc(t)}</li>`).join('')}</ul>
+    ${c.note ? `<p class="discret">Ce qu’il lui manque : ${esc(c.note)}</p>` : ''}`;
+}
+
+// ---------------------------------------------------------------- Mon bilan
+
+const CHAMPS_BILAN = [
+  { cle: 'positif', lib: 'Ce que je retiens de positif', aide: 'Sur le plan professionnel et personnel : ce que tu as aimé, réussi, appris. Donne des exemples.', requis: true },
+  { cle: 'difficile', lib: 'Ce qui a été difficile', aide: 'Ce qui t’a moins plu ou mis en difficulté, et comment tu as réagi.', requis: true },
+  { cle: 'integration', lib: 'Mon intégration dans l’équipe', aide: 'Comment tu as été accueilli, tes relations avec ton tuteur, les salariés, les clients.', requis: true },
+  { cle: 'apport', lib: 'Ce que cette PFMP m’a apporté', aide: 'Sur le monde du travail, sur le métier, sur mon orientation.', requis: true },
+  { cle: 'equipe', lib: 'Ce que je retiens de mon tuteur et de l’équipe', aide: 'Facultatif : un conseil reçu, une personne qui t’a marqué, un merci.', requis: false },
+];
+
+export function editeurBilan(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  zone.innerHTML = `
+    <div class="bandeau info"><p>🏁 Prends du recul sur tes quatre semaines. Sois honnête : un stage difficile peut faire un très bon bilan.</p></div>
+    <form class="carte" novalidate>${CHAMPS_BILAN.map((c) => `<label class="champ"><span class="lib">${esc(c.lib)}${c.requis ? ' <span class="requis">*</span>' : ''}</span>
+      <textarea name="${c.cle}" rows="4" maxlength="1500"${dis}>${esc(contenu[c.cle] || '')}</textarea><span class="aide">${esc(c.aide)}</span></label>`).join('')}</form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => Object.fromEntries(CHAMPS_BILAN.map((c) => [c.cle, form.elements[c.cle].value]));
+  form.addEventListener('input', () => changer(lire()));
+  return { definirLectureSeule(v) { form.querySelectorAll('textarea').forEach((x) => { x.disabled = v; }); } };
+}
+
+export const lectureBilan = (c) => `<dl class="fiche-lecture">${CHAMPS_BILAN.map((x) => `<dt>${esc(x.lib)}</dt><dd class="${c[x.cle] || !x.requis ? '' : 'vide'}">${c[x.cle] ? esc(c[x.cle]) : (x.requis ? 'manquant' : '<span class="discret">—</span>')}</dd>`).join('')}</dl>`;
+
+// ---------------------------------------------------------------- Projet professionnel
+
+export function editeurProjet(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  const amorces = etat.config.amorcesProjet;
+  zone.innerHTML = `
+    <div class="bandeau info"><p>🧭 Complète chaque début de phrase avec tes propres mots. Ne pas encore savoir est une vraie réponse : explique simplement pourquoi.</p></div>
+    <form class="carte" novalidate>${amorces.map((a, i) => `<label class="champ"><span class="lib">${i + 1}. ${esc(a)}${i === 1 || i === 2 ? ' <span class="requis">*</span>' : ''}</span>
+      <textarea name="r${i}" rows="2" maxlength="800"${dis}>${esc((contenu.reponses || [])[i] || '')}</textarea></label>`).join('')}</form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => ({ reponses: amorces.map((_, i) => form.elements[`r${i}`].value) });
+  form.addEventListener('input', () => changer(lire()));
+  return { definirLectureSeule(v) { form.querySelectorAll('textarea').forEach((x) => { x.disabled = v; }); } };
+}
+
+export const lectureProjet = (c) => `<dl class="fiche-lecture">${etat.config.amorcesProjet.map((a, i) => `<dt>${esc(a)}</dt><dd class="${(c.reponses || [])[i] ? '' : 'vide'}">${(c.reponses || [])[i] ? esc(c.reponses[i]) : 'non complétée'}</dd>`).join('')}</dl>`;
+
+// ---------------------------------------------------------------- Auto-évaluation
+
+const NIV_AUTO = [['pas_encore', 'Pas encore'], ['en_progres', 'En progrès'], ['acquis', 'Acquis'], ['tres_bien', 'Très bien']];
+
+export function editeurAutoeval(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  const att = etat.config.attitudes;
+  zone.innerHTML = `
+    <div class="bandeau info"><p>🪞 Pour chaque attitude, choisis ton niveau pendant la PFMP. Un exemple concret rend ton auto-évaluation crédible (facultatif).</p></div>
+    <form class="carte" novalidate>
+      ${att.map((a) => `<fieldset class="attitude"><legend>${esc(a.libelle)}</legend>
+        <div class="choix choix-petit">${NIV_AUTO.map(([k, l]) => `<label><input type="radio" name="n-${a.code}" value="${k}"${contenu.niveaux && contenu.niveaux[a.code] === k ? ' checked' : ''}${dis}>${l}</label>`).join('')}</div>
+        <input name="e-${a.code}" maxlength="300" value="${esc((contenu.exemples || {})[a.code] || '')}"${dis} placeholder="Un exemple (facultatif)" style="margin-top:.5rem">
+      </fieldset>`).join('')}
+      <label class="champ"><span class="lib">L’attitude dont je suis le plus fier, et pourquoi <span class="requis">*</span></span>
+        <textarea name="fierte" rows="2" maxlength="600"${dis}>${esc(contenu.fierte || '')}</textarea></label>
+      <label class="champ"><span class="lib">L’attitude que je veux améliorer, et comment <span class="requis">*</span></span>
+        <textarea name="progres" rows="2" maxlength="600"${dis}>${esc(contenu.progres || '')}</textarea></label>
+    </form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => ({
+    niveaux: Object.fromEntries(att.map((a) => [a.code, (form.querySelector(`input[name="n-${a.code}"]:checked`) || {}).value || ''])),
+    exemples: Object.fromEntries(att.map((a) => [a.code, form.elements[`e-${a.code}`].value])),
+    fierte: form.elements.fierte.value, progres: form.elements.progres.value,
+  });
+  form.addEventListener('input', () => changer(lire()));
+  form.addEventListener('change', () => changer(lire()));
+  return { definirLectureSeule(v) { form.querySelectorAll('input, textarea').forEach((x) => { x.disabled = v; }); } };
+}
+
+export function lectureAutoeval(c) {
+  const lib = Object.fromEntries(NIV_AUTO);
+  return `<table class="liste"><thead><tr><th>Attitude</th><th>Niveau</th><th>Exemple</th></tr></thead><tbody>
+    ${etat.config.attitudes.map((a) => `<tr><td>${esc(a.libelle)}</td><td>${c.niveaux && c.niveaux[a.code] ? esc(lib[c.niveaux[a.code]]) : '<span class="discret">—</span>'}</td><td>${esc((c.exemples || {})[a.code] || '')}</td></tr>`).join('')}
+    </tbody></table>
+    <dl class="fiche-lecture"><dt>Attitude dont il est le plus fier</dt><dd>${c.fierte ? esc(c.fierte) : '<span class="discret">—</span>'}</dd>
+    <dt>Attitude à améliorer</dt><dd>${c.progres ? esc(c.progres) : '<span class="discret">—</span>'}</dd></dl>`;
+}
+
+// ---------------------------------------------------------------- Trame de l'oral
+
+const court = (t, n = 90) => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
+
+export function diaposHtml(c, nom = '') {
+  return etat.config.diaposOral.map((x, i) => {
+    const d = (c.diapos || {})[x.cle] || { points: [] };
+    return `<div class="diapo"><div class="diapo-num">${i + 1}/4</div><h3>${esc(d.titre || x.titre)}</h3>
+      <ul>${(d.points || []).filter(Boolean).map((p) => `<li>${esc(p)}</li>`).join('') || '<li class="discret">(à compléter)</li>'}</ul>${nom ? `<div class="diapo-pied">${esc(nom)} · PFMP 1MCVB</div>` : ''}</div>`;
+  }).join('');
+}
+
+export function editeurOral(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  const D = etat.config.diaposOral;
+  const missions = etat.config.blocs.map((b) => [`mission_${b.code.toLowerCase()}`, etat.config.sections[`mission_${b.code.toLowerCase()}`].titre]);
+  zone.innerHTML = `
+    <div class="bandeau info"><p>🎤 Ton oral : 5 minutes de présentation, puis 5 minutes d’échange. Prépare 4 diapos, avec <b>5 informations au plus</b> par diapo : des mots-clés, pas des phrases. Tu les recopieras ensuite dans ton diaporama sur Pearltrees.</p></div>
+    ${lectureSeule ? '' : '<div class="rangee" style="margin-bottom:1rem"><button class="btn secondaire petit" type="button" data-preremplir>✨ Remplir à partir de mon dossier</button><button class="btn neutre petit" type="button" data-apercu>👁 Voir mes diapos</button></div>'}
+    <form class="carte" novalidate>
+      <label class="champ"><span class="lib">La fiche mission que je présente</span>
+        <select name="mission_choisie"${dis}><option value="">— Choisir —</option>${missions.map(([k, t]) => `<option value="${k}"${contenu.mission_choisie === k ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+      ${D.map((x, i) => {
+    const d = (contenu.diapos || {})[x.cle] || { points: [] };
+    return `<fieldset class="diapo-edit"><legend>Diapo ${i + 1} — ${esc(x.titre)}</legend>
+        <p class="aide" style="margin-top:0">${esc(x.aide)}</p>
+        <label class="champ"><span class="lib">Titre de la diapo</span><input name="${x.cle}-titre" maxlength="100" value="${esc(d.titre || '')}" placeholder="${esc(x.titre)}"${dis}></label>
+        ${[0, 1, 2, 3, 4].map((j) => `<input class="point" name="${x.cle}-p${j}" maxlength="160" value="${esc((d.points || [])[j] || '')}" placeholder="Information ${j + 1}${j < 2 ? ' *' : ' (facultatif)'}"${dis}>`).join('')}
+        <label class="champ" style="margin-top:.75rem"><span class="lib">Ce que je dirai (mes notes)</span><textarea name="${x.cle}-notes" rows="2" maxlength="1200"${dis}>${esc(d.notes || '')}</textarea></label>
+      </fieldset>`;
+  }).join('')}
+    </form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => ({
+    mission_choisie: form.elements.mission_choisie.value,
+    diapos: Object.fromEntries(D.map((x) => [x.cle, { titre: form.elements[`${x.cle}-titre`].value, points: [0, 1, 2, 3, 4].map((j) => form.elements[`${x.cle}-p${j}`].value), notes: form.elements[`${x.cle}-notes`].value }])),
+  });
+  form.addEventListener('input', () => changer(lire()));
+  form.addEventListener('change', () => changer(lire()));
+
+  const remplir = (cle, valeurs) => {
+    const vides = [0, 1, 2, 3, 4].map((j) => form.elements[`${cle}-p${j}`]).filter((x) => !x.value);
+    valeurs.filter(Boolean).slice(0, vides.length).forEach((v, k) => { vides[k].value = court(v); });
+  };
+  const bPre = zone.querySelector('[data-preremplir]');
+  if (bPre) bPre.addEventListener('click', async () => {
+    bPre.disabled = true;
+    try {
+      const lireS = async (k) => { try { return (await get(`/eleve/sections/${k}`)).contenu; } catch { return {}; } };
+      const [id, itv, bil] = await Promise.all([lireS('identite'), lireS('interview'), lireS('bilan')]);
+      remplir('entreprise', [id.denomination, id.activite, id.effectif ? `Effectif : ${id.effectif}` : '', id.adresse, id.clientele ? `Clientèle : ${id.clientele}` : '']);
+      const mk = form.elements.mission_choisie.value;
+      if (mk) {
+        const mi = await lireS(mk);
+        remplir('mission', [mi.titre, { observe: 'Mission observée', participe: 'J’y ai participé', realise: 'Je l’ai réalisée' }[mi.role], mi.objectifs, mi.resultats, mi.ameliorations]);
+      }
+      remplir('interview', [itv.poste ? `Interview : ${itv.poste}` : '', itv.appris]);
+      remplir('bilan', [bil.positif, bil.difficile, bil.apport, 'Merci à mon tuteur et à toute l’équipe']);
+      changer(lire());
+      toast('Prérempli à partir de ton dossier. Raccourcis maintenant chaque information : quelques mots suffisent !', 'ok', 6000);
+    } finally { bPre.disabled = false; }
+  });
+  const bAp = zone.querySelector('[data-apercu]');
+  if (bAp) bAp.addEventListener('click', () => {
+    const m = modale('Mes 4 diapos', `<div class="diapos">${diaposHtml(lire())}</div>
+      <button class="btn secondaire plein" type="button" data-imprimer style="margin-top:1rem">🖨 Imprimer ou enregistrer en PDF</button>`);
+    m.el.querySelector('[data-imprimer]').addEventListener('click', () => imprimer(`<div class="diapos impr">${diaposHtml(lire(), `${etat.utilisateur.prenom} ${etat.utilisateur.nom}`)}</div>`));
+  });
+  return { definirLectureSeule(v) { form.querySelectorAll('input, textarea, select').forEach((x) => { x.disabled = v; }); } };
+}
+
+export function lectureOral(c) {
+  return `<div class="diapos">${diaposHtml(c)}</div>
+    ${etat.config.diaposOral.map((x) => (c.diapos && c.diapos[x.cle] && c.diapos[x.cle].notes ? `<p class="petit"><b>Notes — ${esc(x.titre)} :</b> ${esc(c.diapos[x.cle].notes)}</p>` : '')).join('')}`;
 }

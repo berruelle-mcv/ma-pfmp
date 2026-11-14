@@ -5,16 +5,16 @@ import {
   $, esc, toast, action, modale, dateLongue, dateCourte, ilYA, joursOuvres, imprimer,
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
-import { lectureIdentite, lectureIntroduction, lectureVeille, lectureMission, lectureInterview, relectureHtml } from './rubriques.js';
+import { lectureIdentite, lectureIntroduction, lectureVeille, lectureMission, lectureInterview, lectureChecklist, lectureBilan, lectureProjet, lectureAutoeval, lectureOral, relectureHtml } from './rubriques.js';
 import { arbreHtml } from './orga.js';
 import { commentaireHtml } from './eleve.js';
 
-const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille', 'interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4'];
-const COURT = { identite: 'Fiche', organigramme: 'Orga', introduction: 'Intro', veille: 'Veille', interview: 'Interview', mission_b1: 'B1', mission_b2: 'B2', mission_b3: 'B3', mission_b4: 'B4' };
+const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille', 'interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4', 'checklist', 'bilan', 'projet', 'autoeval', 'oral'];
+const COURT = { identite: 'Fiche', organigramme: 'Orga', introduction: 'Intro', veille: 'Veille', interview: 'Interview', mission_b1: 'B1', mission_b2: 'B2', mission_b3: 'B3', mission_b4: 'B4', checklist: 'Check', bilan: 'Bilan', projet: 'Projet', autoeval: 'Auto', oral: 'Oral' };
 const SYMB = { vide: ['·', 'ms-vide', 'à faire'], brouillon: ['✎', 'ms-brouillon', 'brouillon'], soumis: ['✓', 'ms-soumis', 'terminée'], a_revoir: ['!', 'ms-revoir', 'à revoir'], valide: ['✓✓', 'ms-valide', 'validée'] };
 function miniStatuts(sections) {
   const un = (cle) => { const st = sections[cle].commence ? sections[cle].statut : 'vide'; const [sy, cl, lib] = SYMB[st] || SYMB.vide; return `<span class="${cl}" title="${esc(titre(cle))} : ${lib}">${COURT[cle]} <b>${sy}</b></span>`; };
-  return `<div class="mini-statuts">${['identite', 'organigramme', 'introduction', 'veille'].map(un).join('')}</div><div class="mini-statuts">${['interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4'].map(un).join('')}</div>`;
+  return `<div class="mini-statuts">${['identite', 'organigramme', 'introduction', 'veille'].map(un).join('')}</div><div class="mini-statuts">${['interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4'].map(un).join('')}</div><div class="mini-statuts">${['checklist', 'bilan', 'projet', 'autoeval', 'oral'].map(un).join('')}</div>`;
 }
 const initiales = (p) => (p ? `${p.prenom.charAt(0)}${p.nom.charAt(0)}`.toUpperCase() : '');
 const titre = (cle) => etat.config.sections[cle].titre;
@@ -87,7 +87,7 @@ function carteEleve(e, referent) {
 
 // ---------------------------------------------------------------- Fiche élève
 
-const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche'], ['organigramme', 'Orga'], ['introduction', 'Intro'], ['veille', 'Veille'], ['interview', 'Interview'], ['mission_b1', 'Mission B1'], ['mission_b2', 'Mission B2'], ['mission_b3', 'Mission B3'], ['mission_b4', 'Mission B4'], ['compte', 'Compte']];
+const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche'], ['organigramme', 'Orga'], ['introduction', 'Intro'], ['veille', 'Veille'], ['interview', 'Interview'], ['mission_b1', 'Mission B1'], ['mission_b2', 'Mission B2'], ['mission_b3', 'Mission B3'], ['mission_b4', 'Mission B4'], ['checklist', 'Check-list'], ['bilan', 'Bilan'], ['projet', 'Projet'], ['autoeval', 'Auto-éval.'], ['oral', 'Oral'], ['compte', 'Compte']];
 
 export async function fiche(vue, id, onglet = 'suivi') {
   if (!ONGLETS.some(([k]) => k === onglet)) onglet = 'suivi';
@@ -166,7 +166,8 @@ export async function fiche(vue, id, onglet = 'suivi') {
     const s = d.sections[cle];
     const bloc = cle.startsWith('mission_') ? etat.config.blocs.find((b) => `mission_${b.code.toLowerCase()}` === cle) : null;
     const lecture = cle === 'identite' ? lectureIdentite(s.contenu) : cle === 'organigramme' ? arbreHtml(s.contenu.noeuds || []) : cle === 'veille' ? lectureVeille(s.contenu)
-      : cle === 'interview' ? lectureInterview(s.contenu) : bloc ? lectureMission(s.contenu, bloc, d.journal.activites) : lectureIntroduction(s.contenu);
+      : cle === 'interview' ? lectureInterview(s.contenu) : cle === 'checklist' ? lectureChecklist(s.contenu) : cle === 'bilan' ? lectureBilan(s.contenu)
+      : cle === 'projet' ? lectureProjet(s.contenu) : cle === 'autoeval' ? lectureAutoeval(s.contenu) : cle === 'oral' ? lectureOral(s.contenu) : bloc ? lectureMission(s.contenu, bloc, d.journal.activites) : lectureIntroduction(s.contenu);
     const valide = s.statut === 'valide';
     return `
       <div class="rangee entre" style="margin-bottom:.75rem"><h2 style="margin:0">${esc(titre(cle))}</h2>${pastilleStatut(s.modifie_le ? s.statut : 'vide')}</div>

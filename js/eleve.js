@@ -5,20 +5,25 @@ import {
   $, esc, toast, action, modale, debounce, dateLongue, jourSemaine, ajouterJours, lundiDe, jourSem, dateHeure,
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
-import { editeurIdentite, editeurIntroduction, editeurVeille, editeurMission, editeurInterview, relectureHtml } from './rubriques.js';
+import { editeurIdentite, editeurIntroduction, editeurVeille, editeurMission, editeurInterview, editeurChecklist, editeurBilan, editeurProjet, editeurAutoeval, editeurOral, relectureHtml } from './rubriques.js';
 import { editeurOrganigramme } from './orga.js';
 
-const ICONES = { identite: '🏢', organigramme: '🧩', introduction: '✍️', veille: '🔍', interview: '🎤', mission_b1: '📝', mission_b2: '📝', mission_b3: '📝', mission_b4: '📝' };
+const ICONES = { identite: '🏢', organigramme: '🧩', introduction: '✍️', veille: '🔍', interview: '🗣️', mission_b1: '📝', mission_b2: '📝', mission_b3: '📝', mission_b4: '📝', checklist: '✅', bilan: '🏁', projet: '🧭', autoeval: '🪞', oral: '🎤' };
 const DESCRIPTIONS = {
   identite: 'Les informations clés de ton entreprise',
   organigramme: 'Qui fait quoi, et où tu te situes',
-  introduction: 'Pourquoi cette entreprise ? (5 à 10 lignes)',
+  introduction: 'Comment ton stage a commencé (5 à 10 lignes)',
   veille: 'Concurrents et veille de l’entreprise : à commencer en semaine 1, à finir en semaine 2',
   interview: '10 questions à un professionnel de l’entreprise',
   mission_b1: 'Une mission pour « Conseiller et vendre »',
   mission_b2: 'Une mission pour « Suivre les ventes »',
   mission_b3: 'Une mission pour « Fidéliser » (l’observation compte)',
   mission_b4: 'Une mission pour « Prospecter et valoriser l’offre »',
+  checklist: 'Ce que tu dois rapporter avant de quitter l’entreprise',
+  bilan: 'Ce que tu retiens de tes quatre semaines',
+  projet: 'La suite : ton métier, ta formation, ta prochaine PFMP',
+  autoeval: 'Tes 10 attitudes professionnelles, en toute honnêteté',
+  oral: 'Tes 4 diapos pour l’oral de janvier (5 + 5 minutes)',
 };
 
 function phase(jour) {
@@ -359,7 +364,7 @@ export async function dossier(vue) {
 
 // ---------------------------------------------------------------- Rubrique (fiche, organigramme, introduction)
 
-const EDITEURS = { identite: editeurIdentite, organigramme: editeurOrganigramme, introduction: editeurIntroduction, veille: editeurVeille, interview: editeurInterview };
+const EDITEURS = { identite: editeurIdentite, organigramme: editeurOrganigramme, introduction: editeurIntroduction, veille: editeurVeille, interview: editeurInterview, checklist: editeurChecklist, bilan: editeurBilan, projet: editeurProjet, autoeval: editeurAutoeval, oral: editeurOral };
 function editeurPour(cle) {
   if (EDITEURS[cle]) return EDITEURS[cle];
   const bloc = etat.config.blocs.find((b) => `mission_${b.code.toLowerCase()}` === cle);
@@ -382,7 +387,7 @@ export async function rubrique(vue, cle) {
     <div data-editeur></div>
     <div class="barre-envoi">
       <ul class="manques" data-manques></ul>
-      ${etat.config.iaActive ? '<button class="btn secondaire plein btn-relire" type="button" data-relire></button>' : ''}
+      ${etat.config.iaActive && s.relisible !== false && etat.config.sections[cle].relisible !== false ? '<button class="btn secondaire plein btn-relire" type="button" data-relire></button>' : ''}
       <button class="btn plein" type="button" data-envoyer>J’ai terminé cette partie</button>
       <p class="etat-sauvegarde" data-sauvegarde>&nbsp;</p>
     </div>`;
