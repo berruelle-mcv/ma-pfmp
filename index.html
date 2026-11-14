@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ma PFMP — mon carnet de PFMP</title>
+  <meta name="description" content="Ma PFMP : le carnet de PFMP des élèves de 1re MCV option B.">
+  <meta name="theme-color" content="#0f5f5b">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icones/icone-192.png">
+  <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Ma PFMP">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header id="entete" hidden>
+    <a href="#/" class="marque" aria-label="Accueil Ma PFMP"><span class="marque-pastille">P</span>Ma PFMP</a>
+    <nav id="nav-prof" class="nav-prof" hidden>
+      <a href="#/" data-nav="classe">Classe</a>
+      <a href="#/competences" data-nav="competences">Compétences</a>
+      <a href="#/comptes" data-nav="comptes">Comptes</a>
+    </nav>
+    <button id="btn-deconnexion" class="btn-lien" type="button">Se déconnecter</button>
+  </header>
+
+  <main id="vue" tabindex="-1">
+    <div class="chargement">Chargement…</div>
+  </main>
+
+  <nav id="nav-eleve" class="nav-eleve" hidden>
+    <a href="#/" data-nav="accueil"><span aria-hidden="true">🏠</span>Accueil</a>
+    <a href="#/journal" data-nav="journal"><span aria-hidden="true">📓</span>Journal</a>
+    <a href="#/dossier" data-nav="dossier"><span aria-hidden="true">📁</span>Mon dossier</a>
+  </nav>
+
+  <div id="toasts" aria-live="polite"></div>
+  <div id="impression" aria-hidden="true"></div>
+  <noscript>Ma PFMP a besoin de JavaScript pour fonctionner.</noscript>
+</body>
+</html>
