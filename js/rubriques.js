@@ -1,5 +1,6 @@
 // Définition des rubriques du dossier (formulaires et lecture).
 import { esc, nbMots } from './ui.js';
+import { etat } from './app.js';
 
 export const ANNUAIRE = 'https://annuaire-entreprises.data.gouv.fr/';
 
@@ -115,3 +116,74 @@ export function editeurIntroduction(zone, contenu, { lectureSeule, changer }) {
 }
 
 export const lectureIntroduction = (c) => (c.texte ? `<div class="texte-lecture">${esc(c.texte)}</div><p class="discret petit">${nbMots(c.texte)} mots</p>` : '<p class="discret">Pas encore rédigée.</p>');
+
+// ---------------------------------------------------------------- Veille concurrentielle et commerciale
+
+
+const CHAMPS_CONCURRENT = [
+  { cle: 'nom', lib: 'Nom', max: 120, requis: true },
+  { cle: 'lieu', lib: 'Où ? (ville, quartier, en ligne…)', max: 120 },
+  { cle: 'offre', lib: 'Ce qu’il propose', max: 300, requis: true, zone: true },
+  { cle: 'prix', lib: 'Prix ou positionnement (moins cher, haut de gamme…)', max: 200 },
+  { cle: 'fort', lib: 'Un point fort', max: 200, requis: true },
+  { cle: 'faible', lib: 'Un point faible', max: 200, requis: true },
+];
+
+const videConcurrent = () => Object.fromEntries(CHAMPS_CONCURRENT.map((c) => [c.cle, '']));
+
+export function editeurVeille(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  const conc = [0, 1, 2].map((i) => ({ ...videConcurrent(), ...((contenu.concurrents || [])[i] || {}) }));
+  const sources = new Set(contenu.sources || []);
+  const req = ' <span class="requis" title="obligatoire">*</span>';
+  zone.innerHTML = `
+    <div class="bandeau info"><p>🔍 Observe, écoute ton tuteur, regarde les sites et les réseaux des concurrents. Pose-lui la question : « Qui sont vos principaux concurrents ? Comment vous tenez-vous informés ? »</p>
+      <p class="petit">🔒 Seulement des informations publiques ou que ton tuteur t’autorise à donner.</p></div>
+    <form class="carte" novalidate>
+      <div class="groupe-titre">Les concurrents (au moins deux)</div>
+      ${conc.map((c, i) => `<fieldset class="concurrent"><legend>Concurrent n° ${i + 1}${i < 2 ? req : ' (facultatif)'}</legend>
+        ${CHAMPS_CONCURRENT.map((ch) => `<label class="champ"><span class="lib">${esc(ch.lib)}</span>${ch.zone
+    ? `<textarea name="c${i}-${ch.cle}" rows="2" maxlength="${ch.max}"${dis}>${esc(c[ch.cle])}</textarea>`
+    : `<input name="c${i}-${ch.cle}" maxlength="${ch.max}" value="${esc(c[ch.cle])}"${dis}>`}</label>`).join('')}
+      </fieldset>`).join('')}
+      <label class="champ"><span class="lib">Comparaison avec mon entreprise${req}</span>
+        <textarea name="comparaison" rows="3" maxlength="800"${dis} placeholder="Par rapport à ses concurrents, mon entreprise se distingue par…">${esc(contenu.comparaison || '')}</textarea></label>
+      <div class="groupe-titre">La veille commerciale</div>
+      <fieldset><legend>Comment l’entreprise se tient-elle informée ?${req}</legend>
+        <div class="cases">${etat.config.sourcesVeille.map((s) => `<label><input type="checkbox" name="sources" value="${esc(s)}"${sources.has(s) ? ' checked' : ''}${dis}> ${esc(s)}</label>`).join('')}</div>
+        <label class="champ" style="margin-top:.75rem"><span class="lib">Autre source</span><input name="sources_autre" maxlength="200" value="${esc(contenu.sources_autre || '')}"${dis}></label>
+      </fieldset>
+      <label class="champ"><span class="lib">Les offres ou actions commerciales en cours${req}</span>
+        <textarea name="actions" rows="3" maxlength="1200"${dis} placeholder="Promotions, campagne de prospection, offre de saison, nouveau produit…">${esc(contenu.actions || '')}</textarea></label>
+      <label class="champ"><span class="lib">Ce que j’ai appris sur le marché</span>
+        <textarea name="appris" rows="3" maxlength="1200"${dis} placeholder="Les prix augmentent, les clients comparent sur internet, la concurrence est forte sur…">${esc(contenu.appris || '')}</textarea></label>
+    </form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => ({
+    concurrents: [0, 1, 2].map((i) => Object.fromEntries(CHAMPS_CONCURRENT.map((ch) => [ch.cle, form.elements[`c${i}-${ch.cle}`].value]))),
+    comparaison: form.elements.comparaison.value,
+    sources: [...form.querySelectorAll('input[name=sources]:checked')].map((x) => x.value),
+    sources_autre: form.elements.sources_autre.value,
+    actions: form.elements.actions.value,
+    appris: form.elements.appris.value,
+  });
+  form.addEventListener('input', () => changer(lire()));
+  form.addEventListener('change', () => changer(lire()));
+  return { definirLectureSeule(v) { form.querySelectorAll('input, textarea').forEach((x) => { x.disabled = v; }); } };
+}
+
+export function lectureVeille(c) {
+  const conc = (c.concurrents || []).filter((x) => x.nom || x.offre);
+  const val = (v) => (v ? esc(v) : '<span class="discret">—</span>');
+  return `
+    <div class="groupe-titre" style="margin-top:0">Concurrents</div>
+    ${conc.length ? `<div style="overflow-x:auto"><table class="liste"><thead><tr>${CHAMPS_CONCURRENT.map((ch) => `<th>${esc(ch.lib.split(' (')[0])}</th>`).join('')}</tr></thead>
+      <tbody>${conc.map((x) => `<tr>${CHAMPS_CONCURRENT.map((ch) => `<td>${val(x[ch.cle])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="discret">Aucun concurrent renseigné.</p>'}
+    <dl class="fiche-lecture">
+      <dt>Comparaison avec son entreprise</dt><dd class="${c.comparaison ? '' : 'vide'}">${c.comparaison ? esc(c.comparaison) : 'manquante'}</dd>
+      <dt>Sources de veille</dt><dd>${[...(c.sources || []), c.sources_autre].filter(Boolean).map(esc).join(' · ') || '<span class="discret">—</span>'}</dd>
+      <dt>Offres et actions commerciales en cours</dt><dd class="${c.actions ? '' : 'vide'}">${c.actions ? esc(c.actions) : 'manquantes'}</dd>
+      <dt>Ce qu’il a appris sur le marché</dt><dd>${val(c.appris)}</dd>
+    </dl>`;
+}

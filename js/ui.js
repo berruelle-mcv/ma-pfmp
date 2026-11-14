@@ -62,7 +62,7 @@ export const MOTIFS = { absent: 'Absent·e', ferme: 'Entreprise fermée', repos:
 export const STATUTS = {
   vide: { lib: 'À faire', cls: 'vide' },
   brouillon: { lib: 'Brouillon', cls: 'brouillon' },
-  soumis: { lib: 'Envoyée au prof', cls: 'soumis' },
+  soumis: { lib: 'Terminée', cls: 'soumis' },
   a_revoir: { lib: 'À revoir', cls: 'revoir' },
   valide: { lib: 'Validée ✓', cls: 'valide' },
 };

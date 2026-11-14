@@ -11,7 +11,8 @@ const ROUTES = {
     [/^\/$/, eleve.accueil, 'accueil'],
     [/^\/journal(?:\/(\d{4}-\d{2}-\d{2}))?$/, eleve.journal, 'journal'],
     [/^\/dossier$/, eleve.dossier, 'dossier'],
-    [/^\/dossier\/(identite|organigramme|introduction)$/, eleve.rubrique, 'dossier'],
+    [/^\/dossier\/(identite|organigramme|introduction|veille)$/, eleve.rubrique, 'dossier'],
+    [/^\/blocs$/, eleve.blocs, 'blocs'],
   ],
   prof: [
     [/^\/$/, prof.classe, 'classe'],

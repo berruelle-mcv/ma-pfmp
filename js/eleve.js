@@ -5,14 +5,15 @@ import {
   $, esc, toast, action, modale, debounce, dateLongue, jourSemaine, ajouterJours, lundiDe, jourSem, dateHeure,
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
-import { editeurIdentite, editeurIntroduction } from './rubriques.js';
+import { editeurIdentite, editeurIntroduction, editeurVeille } from './rubriques.js';
 import { editeurOrganigramme } from './orga.js';
 
-const ICONES = { identite: '🏢', organigramme: '🧩', introduction: '✍️' };
+const ICONES = { identite: '🏢', organigramme: '🧩', introduction: '✍️', veille: '🔍' };
 const DESCRIPTIONS = {
   identite: 'Les informations clés de ton entreprise',
   organigramme: 'Qui fait quoi, et où tu te situes',
   introduction: 'Pourquoi cette entreprise ? (5 à 10 lignes)',
+  veille: 'Concurrents et veille de l’entreprise : à commencer en semaine 1, à finir en semaine 2',
 };
 
 function phase(jour) {
@@ -89,7 +90,7 @@ export async function accueil(vue) {
     <div class="carte"><h2>🗓 À faire : ${esc(etape.titre.toLowerCase())}</h2>
       ${etape.sections.map((cle) => tacheHtml(cle, d.sections[cle])).join('')}
       ${etape.bientot.map((t) => `<div class="tache bientot"><span class="tache-ico">⏳</span><span class="tache-txt">${esc(t)}<small>Bientôt dans Ma PFMP</small></span></div>`).join('')}
-      ${ph === 'pendant' ? '<div class="tache"><span class="tache-ico">📓</span><span class="tache-txt">Journal quotidien<small>Matin et après-midi, 2 minutes</small></span></div>' : ''}
+      ${ph === 'pendant' ? '<div class="tache"><span class="tache-ico">📓</span><span class="tache-txt">Journal quotidien<small>Matin et après-midi, quelques minutes</small></span></div>' : ''}
     </div>` : '';
 
   const n = d.journal.niveaux;
@@ -99,8 +100,9 @@ export async function accueil(vue) {
     ${blocCommentaires}
     ${carteJournal}
     ${blocEtape}
-    ${d.journal.nbActivites ? `<div class="carte"><h2>Mes activités</h2>
-      <p style="margin:0">${NIVEAUX.observe.emoji} ${n.observe} observée${n.observe > 1 ? 's' : ''} · ${NIVEAUX.participe.emoji} ${n.participe} en participation · ${NIVEAUX.realise.emoji} ${n.realise} réalisée${n.realise > 1 ? 's' : ''}</p></div>` : ''}
+    ${ph !== 'avant' ? `<a class="carte lien" href="#/blocs"><h2 style="margin:0">🎯 Mes blocs</h2>
+      <p class="discret petit" style="margin:.25rem 0 0">${NIVEAUX.observe.emoji} ${n.observe} · ${NIVEAUX.participe.emoji} ${n.participe} · ${NIVEAUX.realise.emoji} ${n.realise} — objectif : au moins une activité par bloc</p>
+      ${blocsMiniHtml(d.journal.competences)}</a>` : ''}
     ${ph === 'avant' ? '<div class="bandeau info"><p>Tu peux déjà commencer ta fiche d’identité si tu connais ton entreprise. Le journal s’ouvrira le premier jour de ta PFMP.</p></div>' : ''}`;
 
   vue.addEventListener('click', async (e) => {
@@ -134,7 +136,7 @@ export async function journal(vue, jourDemande) {
 
   if (auj < p.debut) {
     vue.innerHTML = `<h1>📓 Mon journal</h1><div class="carte"><p>Ton journal s’ouvrira le <b>${dateLongue(p.debut)}</b>, premier jour de ta PFMP.</p>
-      <p>Chaque jour, matin et après-midi, tu noteras en 2 minutes ce que tu as fait ou observé.</p></div>${legendeNiveaux()}`;
+      <p>Chaque jour, matin et après-midi, tu noteras en quelques minutes ce que tu as fait ou observé.</p></div>${legendeNiveaux()}`;
     return;
   }
   const max = auj < p.fin ? auj : p.fin;
@@ -280,6 +282,62 @@ export function commentaireHtml(c) {
     <small>${esc(c.auteur_prenom ? `${c.auteur_prenom} ${c.auteur_nom}` : 'Professeur')} · ${esc(dateHeure(c.cree_le))}</small></div>`;
 }
 
+
+// ---------------------------------------------------------------- Mes blocs
+
+const COURTS = { B1: 'Vendre', B2: 'Suivre', B3: 'Fidéliser', B4: 'Prospecter' };
+const ASTUCES = {
+  B1: 'Demande à ton tuteur d’assister à un rendez-vous client, puis de mener toi-même la découverte des besoins.',
+  B2: 'Demande à suivre un dossier après la vente : commande, livraison, règlement ou réclamation.',
+  B3: 'Observe comment l’entreprise garde le contact avec ses clients : relances, fichier clients, avis en ligne.',
+  B4: 'Propose de participer à une action de prospection : phoning, boîtage, préparation d’une tournée.',
+};
+const ORDRE = ['realise', 'participe', 'observe'];
+const meilleur = (x) => (x ? ORDRE.find((k) => x[k]) : null);
+
+function resumeBloc(b, competences) {
+  let activites = 0;
+  let touchees = 0;
+  for (const c of b.competences) {
+    const x = competences[c.code];
+    if (x) { touchees++; activites += x.observe + x.participe + x.realise; }
+  }
+  return { activites, touchees, total: b.competences.length };
+}
+
+export function blocsMiniHtml(competences) {
+  return `<div class="blocs-mini">${etat.config.blocs.map((b) => {
+    const r = resumeBloc(b, competences);
+    return `<div class="${r.activites ? 'ok' : ''}"><b>${r.activites}</b>${esc(COURTS[b.code] || b.code)}</div>`;
+  }).join('')}</div>`;
+}
+
+export async function blocs(vue) {
+  const d = await get('/eleve/accueil');
+  const comp = d.journal.competences;
+  const vides = etat.config.blocs.filter((b) => !resumeBloc(b, comp).activites);
+  vue.innerHTML = `
+    <h1>🎯 Mes blocs</h1>
+    <p class="discret">Ce que ton journal montre de ta PFMP, bloc par bloc. Objectif : au moins une activité dans chaque bloc, pour écrire une fiche mission par bloc.</p>
+    ${vides.length ? `<div class="bandeau chaud"><p>Il te manque encore : <b>${vides.map((b) => esc(COURTS[b.code])).join(', ')}</b>. Regarde les idées ci-dessous et parles-en à ton tuteur.</p></div>`
+    : (d.journal.nbActivites ? '<div class="bandeau ok"><p>Bravo : tes quatre blocs ont au moins une activité ✓</p></div>' : '')}
+    ${d.journal.sansCompetence ? `<p class="petit" style="color:#a4520f">${d.journal.sansCompetence} activité${d.journal.sansCompetence > 1 ? 's' : ''} sans compétence : complète-les dans ton <a href="#/journal">journal</a> pour qu’elles comptent ici.</p>` : ''}
+    ${etat.config.blocs.map((b) => {
+    const r = resumeBloc(b, comp);
+    return `<section class="carte bloc-carte"><h2>${esc(b.titre)}<span class="discret">${r.touchees}/${r.total}</span></h2>
+      ${b.note ? `<p class="discret petit">${esc(b.note.charAt(0).toUpperCase() + b.note.slice(1))} : l’observation compte.</p>` : ''}
+      <div class="jauge"><span style="width:${Math.round((r.touchees / r.total) * 100)}%"></span></div>
+      ${r.activites ? '' : `<p class="astuce">💡 ${esc(ASTUCES[b.code] || '')}</p>`}
+      ${b.competences.map((c) => {
+    const x = comp[c.code];
+    const n = meilleur(x);
+    return `<div class="comp-eleve${n ? '' : ' vide'}"><span class="niv">${n ? NIVEAUX[n].emoji : '·'}</span><span>${esc(c.libelle)}${x ? ` <span class="discret">(${x.observe + x.participe + x.realise})</span>` : ''}</span></div>`;
+  }).join('')}
+    </section>`;
+  }).join('')}
+    ${legendeNiveaux()}`;
+}
+
 // ---------------------------------------------------------------- Dossier
 
 export async function dossier(vue) {
@@ -295,7 +353,7 @@ export async function dossier(vue) {
 
 // ---------------------------------------------------------------- Rubrique (fiche, organigramme, introduction)
 
-const EDITEURS = { identite: editeurIdentite, organigramme: editeurOrganigramme, introduction: editeurIntroduction };
+const EDITEURS = { identite: editeurIdentite, organigramme: editeurOrganigramme, introduction: editeurIntroduction, veille: editeurVeille };
 
 export async function rubrique(vue, cle) {
   const s = await get(`/eleve/sections/${cle}`);
@@ -312,8 +370,8 @@ export async function rubrique(vue, cle) {
     <div data-editeur></div>
     <div class="barre-envoi">
       <ul class="manques" data-manques></ul>
-      <div class="rangee entre"><span class="etat-sauvegarde" data-sauvegarde></span>
-        <button class="btn" type="button" data-envoyer>Envoyer à mon professeur</button></div>
+      <button class="btn plein" type="button" data-envoyer>J’ai terminé cette partie</button>
+      <p class="etat-sauvegarde" data-sauvegarde>&nbsp;</p>
     </div>`;
 
   const elStatut = $('[data-statut]', vue);
@@ -327,16 +385,18 @@ export async function rubrique(vue, cle) {
   function majEtat() {
     elStatut.innerHTML = pastilleStatut(statut);
     const valide = statut === 'valide';
-    elManques.innerHTML = !valide && manques.length ? `<li>Pour envoyer, il manque : ${manques.map(esc).join(', ')}.</li>` : '';
+    elManques.innerHTML = !valide && manques.length ? `<li>Pour terminer, il manque : ${manques.map(esc).join(', ')}.</li>` : '';
     btnEnvoyer.hidden = valide;
-    btnEnvoyer.textContent = statut === 'soumis' ? 'Renvoyer la nouvelle version' : statut === 'a_revoir' ? 'Renvoyer à mon professeur' : 'Envoyer à mon professeur';
-    btnEnvoyer.disabled = manques.length > 0;
+    btnEnvoyer.textContent = statut === 'soumis' ? 'Terminée ✓' : statut === 'a_revoir' ? 'J’ai corrigé : c’est terminé' : 'J’ai terminé cette partie';
+    btnEnvoyer.classList.toggle('secondaire', statut === 'soumis');
+    btnEnvoyer.disabled = manques.length > 0 || statut === 'soumis';
     if (valide) elSauv.textContent = '✅ Validée par ton professeur.';
+    else if (statut === 'soumis' && !enAttente) elSauv.textContent = 'Tu peux encore l’améliorer : tout est enregistré automatiquement.';
   }
 
   EDITEURS[cle]($('[data-editeur]', vue), contenu, {
     lectureSeule: statut === 'valide',
-    changer(c) { contenu = c; enAttente = true; elSauv.textContent = 'Modifications en cours…'; sauverBientot(); },
+    changer(c) { contenu = c; enAttente = true; elSauv.textContent = 'Modifications en cours…'; if (statut !== 'soumis' && statut !== 'valide') btnEnvoyer.disabled = false; sauverBientot(); },
   });
 
   async function sauver() {
@@ -366,9 +426,8 @@ export async function rubrique(vue, cle) {
     if (enAttente) throw new Error('Tes modifications ne sont pas encore enregistrées. Vérifie ta connexion.');
     const r = await post(`/eleve/sections/${cle}/envoyer`);
     statut = r.statut; manques = r.manques;
-    majEtat();
-    toast('Envoyé à ton professeur ✓', 'ok');
-  }));
+    toast('Bravo, partie terminée ✓', 'ok');
+  }).then(majEtat));
 
   const avantDepart = (e) => { if (enAttente) { e.preventDefault(); e.returnValue = ''; } };
   window.addEventListener('beforeunload', avantDepart);

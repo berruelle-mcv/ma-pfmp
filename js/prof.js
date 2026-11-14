@@ -5,12 +5,13 @@ import {
   $, esc, toast, action, modale, dateLongue, dateCourte, ilYA, joursOuvres, imprimer,
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
-import { lectureIdentite, lectureIntroduction } from './rubriques.js';
+import { lectureIdentite, lectureIntroduction, lectureVeille } from './rubriques.js';
 import { arbreHtml } from './orga.js';
 import { commentaireHtml } from './eleve.js';
 
-const RUBRIQUES = ['identite', 'organigramme', 'introduction'];
-const COURT = { identite: 'Fiche', organigramme: 'Orga', introduction: 'Intro' };
+const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille'];
+const COURT = { identite: 'Fiche', organigramme: 'Orga', introduction: 'Intro', veille: 'Veille' };
+const initiales = (p) => (p ? `${p.prenom.charAt(0)}${p.nom.charAt(0)}`.toUpperCase() : '');
 const titre = (cle) => etat.config.sections[cle].titre;
 
 function toutesCompetences() {
@@ -28,27 +29,35 @@ function meilleurNiveau(c) {
 
 export async function classe(vue) {
   const d = await get('/prof/classe');
-  let filtre = 'tous';
+  const moi = etat.utilisateur.id;
   const actifs = d.eleves.filter((e) => e.actif);
+  const mesEleves = actifs.filter((e) => e.referent_id === moi);
+  let filtre = mesEleves.length ? 'mes' : 'tous';
+  const profs = new Map(d.profs.map((p) => [p.id, p]));
 
   function dessiner() {
-    const avecAlerte = actifs.filter((e) => e.alertes.length);
-    const aValider = actifs.filter((e) => Object.values(e.sections).some((s) => s.statut === 'soumis'));
-    const liste = filtre === 'alertes' ? avecAlerte : filtre === 'valider' ? aValider : filtre === 'inactifs' ? d.eleves.filter((e) => !e.actif) : actifs;
+    const base = filtre === 'inactifs' ? d.eleves.filter((e) => !e.actif) : (filtre === 'mes' ? mesEleves : actifs);
+    const avecAlerte = (filtre === 'mes' ? mesEleves : actifs).filter((e) => e.alertes.length);
+    const aLire = (filtre === 'mes' ? mesEleves : actifs).filter((e) => Object.values(e.sections).some((s) => s.statut === 'soumis'));
+    const liste = filtre === 'alertes' ? avecAlerte : filtre === 'lire' ? aLire : base;
+    const perimetre = filtre === 'mes' ? mesEleves : actifs;
+    const nbLire = perimetre.reduce((n, e) => n + Object.values(e.sections).filter((s) => s.statut === 'soumis').length, 0);
+    const jamais = perimetre.filter((e) => !e.derniere_connexion).length;
     vue.innerHTML = `
       <div class="rangee entre"><h1>Classe ${esc(d.pfmp.classe)}</h1><span class="discret">${esc(dateLongue(d.jour))}</span></div>
       <div class="chiffres">
-        <div class="chiffre"><b>${actifs.length}</b><span>élèves</span></div>
-        <div class="chiffre"><b>${d.aValider}</b><span>rubrique${d.aValider > 1 ? 's' : ''} à valider</span></div>
+        <div class="chiffre"><b>${perimetre.length}</b><span>${filtre === 'mes' ? 'élèves dont je suis référent' : 'élèves'}</span></div>
+        <div class="chiffre"><b>${nbLire}</b><span>partie${nbLire > 1 ? 's' : ''} terminée${nbLire > 1 ? 's' : ''} à lire (facultatif)</span></div>
         <div class="chiffre"><b>${avecAlerte.length}</b><span>élève${avecAlerte.length > 1 ? 's' : ''} en alerte</span></div>
-        <div class="chiffre"><b>${actifs.filter((e) => !e.derniere_connexion).length}</b><span>jamais connecté${actifs.filter((e) => !e.derniere_connexion).length > 1 ? 's' : ''}</span></div>
+        <div class="chiffre"><b>${jamais}</b><span>jamais connecté${jamais > 1 ? 's' : ''}</span></div>
       </div>
       <div class="filtres">
-        ${[['tous', 'Tous'], ['valider', `À valider (${aValider.length})`], ['alertes', `Alertes (${avecAlerte.length})`], ['inactifs', 'Désactivés']]
+        ${[['mes', `Mes élèves (${mesEleves.length})`], ['tous', `Toute la classe (${actifs.length})`], ['alertes', `Alertes (${avecAlerte.length})`], ['lire', `À lire (${aLire.length})`], ['inactifs', 'Désactivés']]
     .map(([k, l]) => `<button type="button" data-filtre="${k}" class="${filtre === k ? 'actif' : ''}">${l}</button>`).join('')}
       </div>
       ${!d.eleves.length ? '<div class="carte"><p>Aucun élève pour l’instant.</p><a class="btn" href="#/comptes">Créer les comptes élèves</a></div>' : ''}
-      <div class="grille">${liste.map(carteEleve).join('') || (d.eleves.length ? '<p class="discret">Personne dans cette catégorie.</p>' : '')}</div>`;
+      ${filtre === 'mes' && !mesEleves.length && d.eleves.length ? '<div class="bandeau info"><p>Aucun élève ne vous est encore attribué. Choisissez les référents dans <a href="#/comptes">Comptes</a>.</p></div>' : ''}
+      <div class="grille">${liste.map((e) => carteEleve(e, profs.get(e.referent_id))).join('') || (d.eleves.length ? '<p class="discret">Personne dans cette catégorie.</p>' : '')}</div>`;
   }
 
   vue.addEventListener('click', (e) => {
@@ -58,11 +67,11 @@ export async function classe(vue) {
   dessiner();
 }
 
-function carteEleve(e) {
+function carteEleve(e, referent) {
   const j = e.journal;
   const n = j.niveaux;
   return `<a class="carte lien carte-eleve${e.alertes.some((a) => a.niveau !== 'faible') ? ' alerte' : ''}" href="#/eleve/${e.id}">
-    <div class="rangee entre"><h3>${esc(e.nom.toUpperCase())} ${esc(e.prenom)}</h3>
+    <div class="rangee entre"><h3>${esc(e.nom.toUpperCase())} ${esc(e.prenom)}${referent ? ` <span class="statut vide" title="Référent : ${esc(referent.prenom)}">${esc(initiales(referent))}</span>` : ''}</h3>
       <span class="discret petit">${e.derniere_connexion ? esc(ilYA(e.derniere_connexion)) : '<span style="color:var(--rouge)">jamais connecté·e</span>'}</span></div>
     <div class="statuts">${RUBRIQUES.map((cle) => `<span title="${esc(titre(cle))}">${COURT[cle]} ${pastilleStatut(e.sections[cle].statut)}</span>`).join('')}</div>
     <div class="niveaux-mini">📓 ${j.nbActivites} activité${j.nbActivites > 1 ? 's' : ''} · ${NIVEAUX.observe.emoji} ${n.observe} · ${NIVEAUX.participe.emoji} ${n.participe} · ${NIVEAUX.realise.emoji} ${n.realise}
@@ -73,7 +82,7 @@ function carteEleve(e) {
 
 // ---------------------------------------------------------------- Fiche élève
 
-const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche d’identité'], ['organigramme', 'Organigramme'], ['introduction', 'Introduction'], ['compte', 'Compte']];
+const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche d’identité'], ['organigramme', 'Organigramme'], ['introduction', 'Introduction'], ['veille', 'Veille'], ['compte', 'Compte']];
 
 export async function fiche(vue, id, onglet = 'suivi') {
   if (!ONGLETS.some(([k]) => k === onglet)) onglet = 'suivi';
@@ -150,7 +159,7 @@ export async function fiche(vue, id, onglet = 'suivi') {
 
   function rubriqueHtml(cle) {
     const s = d.sections[cle];
-    const lecture = cle === 'identite' ? lectureIdentite(s.contenu) : cle === 'organigramme' ? arbreHtml(s.contenu.noeuds || []) : lectureIntroduction(s.contenu);
+    const lecture = cle === 'identite' ? lectureIdentite(s.contenu) : cle === 'organigramme' ? arbreHtml(s.contenu.noeuds || []) : cle === 'veille' ? lectureVeille(s.contenu) : lectureIntroduction(s.contenu);
     const valide = s.statut === 'valide';
     return `
       <div class="rangee entre" style="margin-bottom:.75rem"><h2 style="margin:0">${esc(titre(cle))}</h2>${pastilleStatut(s.modifie_le ? s.statut : 'vide')}</div>
@@ -166,7 +175,7 @@ export async function fiche(vue, id, onglet = 'suivi') {
     : `<button class="btn danger petit" type="submit" data-statut-cible="a_revoir">À revoir</button>
                <button class="btn petit" type="submit" data-statut-cible="valide">✓ Valider</button>`}
           </div>
-          <span class="aide">« À revoir » demande un commentaire. « Valider » bloque la rubrique (tu peux la rouvrir).</span>
+          <span class="aide">Tout est facultatif : l’élève avance sans attendre votre validation. « À revoir » demande un commentaire ; « Valider » verrouille la rubrique (vous pouvez la rouvrir).</span>
         </form></div>`;
   }
 
@@ -274,6 +283,7 @@ function fichesCodes(liste) {
 
 export async function comptes(vue) {
   const d = await get('/prof/classe');
+  const optionsRef = (choisi) => `<option value="">— Aucun —</option>${d.profs.map((p) => `<option value="${p.id}"${p.id === choisi ? ' selected' : ''}>${esc(p.prenom)} ${esc(p.nom)}</option>`).join('')}`;
   vue.innerHTML = `
     <h1>Comptes élèves</h1>
     <div class="carte">
@@ -281,22 +291,33 @@ export async function comptes(vue) {
       <p class="discret">Une ligne par élève : <b>Prénom;Nom</b> (ou deux colonnes copiées d’un tableur). Les comptes déjà existants sont ignorés.</p>
       <form data-import>
         <label class="champ"><span class="lib">Liste</span><textarea name="texte" rows="8" placeholder="Léa;Martin&#10;Yanis;Ben Ali"></textarea></label>
+        <label class="champ"><span class="lib">Référent de ces élèves</span><select name="referent">${optionsRef(etat.utilisateur.id)}</select>
+          <span class="aide">Astuce : collez d’abord votre moitié de classe avec vous comme référent, puis l’autre moitié avec votre collègue.</span></label>
         <button class="btn" type="submit">Créer les comptes</button>
       </form>
       <div data-resultat></div>
     </div>
     <div class="carte"><h2>Comptes existants (${d.eleves.length})</h2>
-      ${d.eleves.length ? `<div style="overflow-x:auto"><table class="liste"><thead><tr><th>Élève</th><th>Identifiant</th><th>Dernière connexion</th></tr></thead>
+      ${d.eleves.length ? `<div style="overflow-x:auto"><table class="liste"><thead><tr><th>Élève</th><th>Identifiant</th><th>Référent</th><th>Dernière connexion</th></tr></thead>
       <tbody>${d.eleves.map((e) => `<tr><td><a href="#/eleve/${e.id}/compte">${esc(e.nom.toUpperCase())} ${esc(e.prenom)}</a>${e.actif ? '' : ' <span class="statut revoir">désactivé</span>'}</td>
-        <td><code>${esc(e.identifiant)}</code></td><td>${esc(ilYA(e.derniere_connexion))}</td></tr>`).join('')}</tbody></table></div>
+        <td><code>${esc(e.identifiant)}</code></td><td><select data-referent="${e.id}" aria-label="Référent de ${esc(e.prenom)}" style="min-height:36px;padding:.3rem .5rem">${optionsRef(e.referent_id)}</select></td><td>${esc(ilYA(e.derniere_connexion))}</td></tr>`).join('')}</tbody></table></div>
         <p class="discret petit">Pour un code perdu : ouvre la fiche de l’élève, onglet Compte, « Donner un nouveau code ».</p>` : '<p class="discret">Aucun compte.</p>'}
     </div>`;
+
+  vue.addEventListener('change', (ev) => {
+    const sel = ev.target.closest('[data-referent]');
+    if (!sel) return;
+    action(sel, async () => {
+      await patch(`/prof/eleves/${sel.dataset.referent}`, { referent_id: sel.value ? Number(sel.value) : null });
+      toast('Référent enregistré ✓', 'ok', 1500);
+    });
+  });
 
   $('[data-import]', vue).addEventListener('submit', (ev) => {
     ev.preventDefault();
     const f = ev.target;
     action(f.querySelector('button'), async () => {
-      const r = await post('/prof/eleves/import', { texte: f.texte.value });
+      const r = await post('/prof/eleves/import', { texte: f.texte.value, referent_id: f.referent.value || null });
       f.texte.value = '';
       $('[data-resultat]', vue).innerHTML = `
         ${r.erreurs.length ? `<div class="bandeau chaud" style="margin-top:1rem">${r.erreurs.map((x) => `<p>${esc(x)}</p>`).join('')}</div>` : ''}
