@@ -1,6 +1,6 @@
 // Service worker de Ma PFMP : l'appli s'ouvre même avec un réseau faible.
 // Stratégie « réseau d'abord » : la dernière version publiée est toujours prise quand le réseau répond.
-const CACHE = 'mapfmp-v1.1.0';
+const CACHE = 'mapfmp-v1.2.0';
 const COQUILLE = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/app.js', 'js/api.js', 'js/config.js', 'js/ui.js', 'js/eleve.js', 'js/prof.js', 'js/orga.js', 'js/rubriques.js',

@@ -5,12 +5,17 @@ import {
   $, esc, toast, action, modale, dateLongue, dateCourte, ilYA, joursOuvres, imprimer,
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
-import { lectureIdentite, lectureIntroduction, lectureVeille } from './rubriques.js';
+import { lectureIdentite, lectureIntroduction, lectureVeille, lectureMission, lectureInterview, relectureHtml } from './rubriques.js';
 import { arbreHtml } from './orga.js';
 import { commentaireHtml } from './eleve.js';
 
-const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille'];
-const COURT = { identite: 'Fiche', organigramme: 'Orga', introduction: 'Intro', veille: 'Veille' };
+const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille', 'interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4'];
+const COURT = { identite: 'Fiche', organigramme: 'Orga', introduction: 'Intro', veille: 'Veille', interview: 'Interview', mission_b1: 'B1', mission_b2: 'B2', mission_b3: 'B3', mission_b4: 'B4' };
+const SYMB = { vide: ['·', 'ms-vide', 'à faire'], brouillon: ['✎', 'ms-brouillon', 'brouillon'], soumis: ['✓', 'ms-soumis', 'terminée'], a_revoir: ['!', 'ms-revoir', 'à revoir'], valide: ['✓✓', 'ms-valide', 'validée'] };
+function miniStatuts(sections) {
+  const un = (cle) => { const st = sections[cle].commence ? sections[cle].statut : 'vide'; const [sy, cl, lib] = SYMB[st] || SYMB.vide; return `<span class="${cl}" title="${esc(titre(cle))} : ${lib}">${COURT[cle]} <b>${sy}</b></span>`; };
+  return `<div class="mini-statuts">${['identite', 'organigramme', 'introduction', 'veille'].map(un).join('')}</div><div class="mini-statuts">${['interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4'].map(un).join('')}</div>`;
+}
 const initiales = (p) => (p ? `${p.prenom.charAt(0)}${p.nom.charAt(0)}`.toUpperCase() : '');
 const titre = (cle) => etat.config.sections[cle].titre;
 
@@ -73,7 +78,7 @@ function carteEleve(e, referent) {
   return `<a class="carte lien carte-eleve${e.alertes.some((a) => a.niveau !== 'faible') ? ' alerte' : ''}" href="#/eleve/${e.id}">
     <div class="rangee entre"><h3>${esc(e.nom.toUpperCase())} ${esc(e.prenom)}${referent ? ` <span class="statut vide" title="Référent : ${esc(referent.prenom)}">${esc(initiales(referent))}</span>` : ''}</h3>
       <span class="discret petit">${e.derniere_connexion ? esc(ilYA(e.derniere_connexion)) : '<span style="color:var(--rouge)">jamais connecté·e</span>'}</span></div>
-    <div class="statuts">${RUBRIQUES.map((cle) => `<span title="${esc(titre(cle))}">${COURT[cle]} ${pastilleStatut(e.sections[cle].statut)}</span>`).join('')}</div>
+    ${miniStatuts(e.sections)}
     <div class="niveaux-mini">📓 ${j.nbActivites} activité${j.nbActivites > 1 ? 's' : ''} · ${NIVEAUX.observe.emoji} ${n.observe} · ${NIVEAUX.participe.emoji} ${n.participe} · ${NIVEAUX.realise.emoji} ${n.realise}
       ${j.ecoulees ? ` · ${j.ecoulees - j.manquantes}/${j.ecoulees} demi-journées` : ''}</div>
     ${e.alertes.map((a) => `<p class="alerte-ligne ${a.niveau}">⚠️ ${esc(a.texte)}</p>`).join('')}
@@ -82,7 +87,7 @@ function carteEleve(e, referent) {
 
 // ---------------------------------------------------------------- Fiche élève
 
-const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche d’identité'], ['organigramme', 'Organigramme'], ['introduction', 'Introduction'], ['veille', 'Veille'], ['compte', 'Compte']];
+const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche'], ['organigramme', 'Orga'], ['introduction', 'Intro'], ['veille', 'Veille'], ['interview', 'Interview'], ['mission_b1', 'Mission B1'], ['mission_b2', 'Mission B2'], ['mission_b3', 'Mission B3'], ['mission_b4', 'Mission B4'], ['compte', 'Compte']];
 
 export async function fiche(vue, id, onglet = 'suivi') {
   if (!ONGLETS.some(([k]) => k === onglet)) onglet = 'suivi';
@@ -159,12 +164,15 @@ export async function fiche(vue, id, onglet = 'suivi') {
 
   function rubriqueHtml(cle) {
     const s = d.sections[cle];
-    const lecture = cle === 'identite' ? lectureIdentite(s.contenu) : cle === 'organigramme' ? arbreHtml(s.contenu.noeuds || []) : cle === 'veille' ? lectureVeille(s.contenu) : lectureIntroduction(s.contenu);
+    const bloc = cle.startsWith('mission_') ? etat.config.blocs.find((b) => `mission_${b.code.toLowerCase()}` === cle) : null;
+    const lecture = cle === 'identite' ? lectureIdentite(s.contenu) : cle === 'organigramme' ? arbreHtml(s.contenu.noeuds || []) : cle === 'veille' ? lectureVeille(s.contenu)
+      : cle === 'interview' ? lectureInterview(s.contenu) : bloc ? lectureMission(s.contenu, bloc, d.journal.activites) : lectureIntroduction(s.contenu);
     const valide = s.statut === 'valide';
     return `
       <div class="rangee entre" style="margin-bottom:.75rem"><h2 style="margin:0">${esc(titre(cle))}</h2>${pastilleStatut(s.modifie_le ? s.statut : 'vide')}</div>
       ${s.modifie_le ? `<p class="discret petit">Dernière modification : ${esc(ilYA(s.modifie_le))}${s.manques.length ? ` · manque : ${esc(s.manques.join(', '))}` : ''}</p>` : '<div class="bandeau info"><p>L’élève n’a pas encore commencé cette rubrique.</p></div>'}
       <div class="carte">${lecture}</div>
+      ${relectureHtml(s.relecture, { pourProf: true })}
       <div class="carte"><h2>💬 Commentaires</h2>
         ${s.commentaires.map(commentaireHtml).join('') || '<p class="discret">Aucun commentaire.</p>'}
         <form data-form-com="${cle}">

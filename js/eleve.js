@@ -5,15 +5,20 @@ import {
   $, esc, toast, action, modale, debounce, dateLongue, jourSemaine, ajouterJours, lundiDe, jourSem, dateHeure,
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
-import { editeurIdentite, editeurIntroduction, editeurVeille } from './rubriques.js';
+import { editeurIdentite, editeurIntroduction, editeurVeille, editeurMission, editeurInterview, relectureHtml } from './rubriques.js';
 import { editeurOrganigramme } from './orga.js';
 
-const ICONES = { identite: '🏢', organigramme: '🧩', introduction: '✍️', veille: '🔍' };
+const ICONES = { identite: '🏢', organigramme: '🧩', introduction: '✍️', veille: '🔍', interview: '🎤', mission_b1: '📝', mission_b2: '📝', mission_b3: '📝', mission_b4: '📝' };
 const DESCRIPTIONS = {
   identite: 'Les informations clés de ton entreprise',
   organigramme: 'Qui fait quoi, et où tu te situes',
   introduction: 'Pourquoi cette entreprise ? (5 à 10 lignes)',
   veille: 'Concurrents et veille de l’entreprise : à commencer en semaine 1, à finir en semaine 2',
+  interview: '10 questions à un professionnel de l’entreprise',
+  mission_b1: 'Une mission pour « Conseiller et vendre »',
+  mission_b2: 'Une mission pour « Suivre les ventes »',
+  mission_b3: 'Une mission pour « Fidéliser » (l’observation compte)',
+  mission_b4: 'Une mission pour « Prospecter et valoriser l’offre »',
 };
 
 function phase(jour) {
@@ -328,6 +333,7 @@ export async function blocs(vue) {
       ${b.note ? `<p class="discret petit">${esc(b.note.charAt(0).toUpperCase() + b.note.slice(1))} : l’observation compte.</p>` : ''}
       <div class="jauge"><span style="width:${Math.round((r.touchees / r.total) * 100)}%"></span></div>
       ${r.activites ? '' : `<p class="astuce">💡 ${esc(ASTUCES[b.code] || '')}</p>`}
+      <a class="btn ${r.activites ? '' : 'secondaire '}petit" href="#/dossier/mission_${b.code.toLowerCase()}" style="margin-bottom:.5rem">📝 Ma fiche mission pour ce bloc</a>
       ${b.competences.map((c) => {
     const x = comp[c.code];
     const n = meilleur(x);
@@ -353,7 +359,12 @@ export async function dossier(vue) {
 
 // ---------------------------------------------------------------- Rubrique (fiche, organigramme, introduction)
 
-const EDITEURS = { identite: editeurIdentite, organigramme: editeurOrganigramme, introduction: editeurIntroduction, veille: editeurVeille };
+const EDITEURS = { identite: editeurIdentite, organigramme: editeurOrganigramme, introduction: editeurIntroduction, veille: editeurVeille, interview: editeurInterview };
+function editeurPour(cle) {
+  if (EDITEURS[cle]) return EDITEURS[cle];
+  const bloc = etat.config.blocs.find((b) => `mission_${b.code.toLowerCase()}` === cle);
+  return editeurMission(bloc);
+}
 
 export async function rubrique(vue, cle) {
   const s = await get(`/eleve/sections/${cle}`);
@@ -367,9 +378,11 @@ export async function rubrique(vue, cle) {
     <a class="retour" href="#/dossier">‹ Mon dossier</a>
     <div class="entete-rubrique"><h1>${ICONES[cle]} ${esc(s.titre)}</h1><span data-statut></span></div>
     <div data-messages></div>
+    <div data-relecture></div>
     <div data-editeur></div>
     <div class="barre-envoi">
       <ul class="manques" data-manques></ul>
+      ${etat.config.iaActive ? '<button class="btn secondaire plein btn-relire" type="button" data-relire></button>' : ''}
       <button class="btn plein" type="button" data-envoyer>J’ai terminé cette partie</button>
       <p class="etat-sauvegarde" data-sauvegarde>&nbsp;</p>
     </div>`;
@@ -394,7 +407,7 @@ export async function rubrique(vue, cle) {
     else if (statut === 'soumis' && !enAttente) elSauv.textContent = 'Tu peux encore l’améliorer : tout est enregistré automatiquement.';
   }
 
-  EDITEURS[cle]($('[data-editeur]', vue), contenu, {
+  editeurPour(cle)($('[data-editeur]', vue), contenu, {
     lectureSeule: statut === 'valide',
     changer(c) { contenu = c; enAttente = true; elSauv.textContent = 'Modifications en cours…'; if (statut !== 'soumis' && statut !== 'valide') btnEnvoyer.disabled = false; sauverBientot(); },
   });
@@ -419,6 +432,30 @@ export async function rubrique(vue, cle) {
     return envoi;
   }
   const sauverBientot = debounce(sauver, 1200);
+
+  const zoneRelecture = $('[data-relecture]', vue);
+  zoneRelecture.innerHTML = relectureHtml(s.relecture);
+  const btnRelire = $('[data-relire]', vue);
+  let restantes = s.relecturesRestantes ?? 0;
+  const majRelire = () => {
+    if (!btnRelire) return;
+    btnRelire.textContent = restantes > 0 ? `🤖 Faire relire mon travail (${restantes} relecture${restantes > 1 ? 's' : ''} possible${restantes > 1 ? 's' : ''})` : '🤖 Relectures utilisées pour cette partie';
+    btnRelire.disabled = restantes <= 0;
+  };
+  majRelire();
+  if (btnRelire) btnRelire.addEventListener('click', () => action(btnRelire, async () => {
+    sauverBientot.annuler();
+    await sauver();
+    btnRelire.textContent = 'Relecture en cours… (quelques secondes)';
+    try {
+      const r = await post(`/eleve/sections/${cle}/relire`);
+      restantes = r.restantes;
+      zoneRelecture.innerHTML = relectureHtml(r.relecture);
+      zoneRelecture.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast('Relecture faite ✓ Lis les conseils, puis améliore ton texte.', 'ok', 4000);
+    } finally { majRelire(); }
+  }).then(majRelire));
+  if (btnRelire && statut === 'valide') btnRelire.hidden = true;
 
   btnEnvoyer.addEventListener('click', () => action(btnEnvoyer, async () => {
     sauverBientot.annuler();

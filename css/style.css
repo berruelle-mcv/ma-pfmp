@@ -331,3 +331,14 @@ fieldset.concurrent legend { padding: 0 .35rem; }
 .blocs-mini div.ok { background: var(--vert-clair); color: var(--vert); }
 .blocs-mini b { display: block; font-size: 1.05rem; }
 .nav-eleve a { font-size: .72rem; }
+
+/* Relecture IA */
+.relecture { background: #eef4f8; border-left: 4px solid var(--bleu); border-radius: 0 12px 12px 0; padding: .75rem 1rem; margin-bottom: 1rem; }
+.relecture-titre { font-weight: 700; margin-bottom: .4rem; }
+.relecture-sous { font-weight: 600; font-size: .9rem; margin: .5rem 0 .2rem; }
+.relecture ul { margin: 0; padding-left: 1.2rem; }
+.relecture li { margin-bottom: .2rem; }
+.btn-relire { margin-bottom: .5rem; }
+.mini-statuts { display: flex; flex-wrap: wrap; gap: .3rem .6rem; font-size: .82rem; margin: .5rem 0; }
+.mini-statuts span b { font-weight: 700; }
+.ms-vide { color: #9a948a; } .ms-brouillon { color: var(--bleu); } .ms-soumis { color: #a4520f; } .ms-revoir { color: var(--rouge); } .ms-valide { color: var(--vert); }

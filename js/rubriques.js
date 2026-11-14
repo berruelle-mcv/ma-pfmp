@@ -1,6 +1,7 @@
 // Définition des rubriques du dossier (formulaires et lecture).
 import { esc, nbMots } from './ui.js';
 import { etat } from './app.js';
+import { get } from './api.js';
 
 export const ANNUAIRE = 'https://annuaire-entreprises.data.gouv.fr/';
 
@@ -186,4 +187,156 @@ export function lectureVeille(c) {
       <dt>Offres et actions commerciales en cours</dt><dd class="${c.actions ? '' : 'vide'}">${c.actions ? esc(c.actions) : 'manquantes'}</dd>
       <dt>Ce qu’il a appris sur le marché</dt><dd>${val(c.appris)}</dd>
     </dl>`;
+}
+
+// ---------------------------------------------------------------- Fiches mission
+
+const TRAME_MISSION = [
+  { cle: 'contexte', lib: 'La mission', aide: 'Quelle était la mission ? Dans quelle situation (client, produit, moment) ?', lignes: 3, max: 1200, requis: true },
+  { cle: 'objectifs', lib: 'Les objectifs', aide: 'À quoi servait cette mission pour l’entreprise ?', lignes: 2, max: 800, requis: true },
+  { cle: 'moyens_materiels', lib: 'Les moyens matériels', aide: 'Outils, logiciels, documents, téléphone, véhicule…', lignes: 2, max: 600 },
+  { cle: 'moyens_humains', lib: 'Les moyens humains', aide: 'Qui était là ? Qui t’a aidé ou formé ? (postes, pas de noms de famille)', lignes: 2, max: 600 },
+  { cle: 'deroulement', lib: 'Le déroulement', aide: 'Étape par étape. Distingue ce que tu as fait toi-même de ce que tu as observé.', lignes: 6, max: 3000, requis: true },
+  { cle: 'difficultes', lib: 'Les difficultés', aide: 'Ce qui a été difficile, et comment tu (ou ton tuteur) l’as géré.', lignes: 3, max: 1000, requis: true },
+  { cle: 'resultats', lib: 'Les résultats', aide: 'Ce que la mission a donné : rendez-vous obtenus, vente, client satisfait… (sans chiffres confidentiels)', lignes: 3, max: 1000, requis: true },
+  { cle: 'ameliorations', lib: 'Les points d’amélioration', aide: 'Si c’était à refaire, que ferais-tu différemment ?', lignes: 3, max: 1000, requis: true },
+  { cle: 'preuves', lib: 'Les preuves', aide: 'Ce que tu peux montrer : document réalisé, capture d’écran, fiche produit… (sans données confidentielles)', lignes: 2, max: 800 },
+];
+const ROLES = { observe: '👀 Je l’ai observée', participe: '🤝 J’y ai participé', realise: '⭐ Je l’ai réalisée' };
+
+export function editeurMission(bloc) {
+  return (zone, contenu, { lectureSeule, changer }) => {
+    const dis = lectureSeule ? ' disabled' : '';
+    const req = ' <span class="requis" title="obligatoire">*</span>';
+    const choisies = new Set(contenu.competences || []);
+    let liees = new Set(contenu.activites || []);
+    let activites = [];
+    const codesBloc = new Set(bloc.competences.map((c) => c.code));
+    zone.innerHTML = `
+      <div class="bandeau info"><p>📝 Choisis <b>une</b> mission de ce bloc, réalisée ou simplement observée, et raconte-la en suivant la trame. Pars d’une activité de ton journal.</p></div>
+      <form class="carte" novalidate>
+        <div class="groupe-titre" style="margin-top:0">Activités de ton journal pour ce bloc</div>
+        <div data-activites><p class="discret petit">Chargement…</p></div>
+        <div class="groupe-titre">La mission</div>
+        <label class="champ"><span class="lib">Intitulé de la mission${req}</span>
+          <input name="titre" maxlength="150" value="${esc(contenu.titre || '')}"${dis} placeholder="ex. Préparer et mener une séance de phoning"></label>
+        <fieldset><legend>Ton rôle${req}</legend><div class="choix">${Object.entries(ROLES).map(([k, l]) => `
+          <label><input type="radio" name="role" value="${k}"${contenu.role === k ? ' checked' : ''}${dis}>${l}</label>`).join('')}</div></fieldset>
+        ${TRAME_MISSION.map((t) => `<label class="champ"><span class="lib">${esc(t.lib)}${t.requis ? req : ''}</span>
+          <textarea name="${t.cle}" rows="${t.lignes}" maxlength="${t.max}"${dis}>${esc(contenu[t.cle] || '')}</textarea><span class="aide">${esc(t.aide)}</span></label>`).join('')}
+        <fieldset><legend>Compétences mobilisées${req}</legend>
+          <div class="cases">${bloc.competences.map((c) => `<label><input type="checkbox" name="competences" value="${c.code}"${choisies.has(c.code) ? ' checked' : ''}${dis}> ${esc(c.libelle)}</label>`).join('')}</div></fieldset>
+      </form>`;
+    const form = zone.querySelector('form');
+    form.addEventListener('submit', (e) => e.preventDefault());
+    const lire = () => {
+      const r = { titre: form.elements.titre.value, role: (form.querySelector('input[name=role]:checked') || {}).value || '' };
+      for (const t of TRAME_MISSION) r[t.cle] = form.elements[t.cle].value;
+      r.competences = [...form.querySelectorAll('input[name=competences]:checked')].map((x) => x.value);
+      r.activites = [...liees];
+      return r;
+    };
+    const zoneAct = zone.querySelector('[data-activites]');
+    function dessinerActivites() {
+      const duBloc = activites.filter((a) => a.competence && codesBloc.has(a.competence));
+      const autres = activites.filter((a) => liees.has(a.id) && !duBloc.includes(a));
+      const liste = [...duBloc, ...autres];
+      zoneAct.innerHTML = liste.length ? `<div class="cases">${liste.map((a) => `<label><input type="checkbox" data-act="${a.id}"${liees.has(a.id) ? ' checked' : ''}${dis}>
+          <span>${NIVEAUX_EMO[a.niveau]} ${esc(a.texte)} <span class="discret petit">(${esc(dateCourteFr(a.jour))})</span></span></label>`).join('')}</div>
+        <p class="aide">Coche l’activité (ou les activités) que raconte ta fiche.</p>`
+        : '<p class="discret petit">Aucune activité de ce bloc dans ton journal pour l’instant. Note-les au fil des jours, en choisissant une compétence de ce bloc. Si tu n’as pas pu travailler ce bloc en entreprise, parles-en à ton professeur.</p>';
+    }
+    zoneAct.addEventListener('change', (e) => {
+      const c = e.target.closest('[data-act]');
+      if (!c) return;
+      const id = Number(c.dataset.act);
+      if (c.checked) {
+        liees.add(id);
+        const a = activites.find((x) => x.id === id);
+        if (a && !form.elements.titre.value) form.elements.titre.value = a.texte.slice(0, 150);
+        if (a && !form.querySelector('input[name=role]:checked')) { const r = form.querySelector(`input[name=role][value=${a.niveau}]`); if (r) r.checked = true; }
+        if (a && a.competence && codesBloc.has(a.competence)) { const cc = form.querySelector(`input[name=competences][value="${a.competence}"]`); if (cc) cc.checked = true; }
+      } else liees.delete(id);
+      changer(lire());
+    });
+    form.addEventListener('input', (e) => { if (!e.target.closest('[data-act]')) changer(lire()); });
+    form.addEventListener('change', (e) => { if (!e.target.closest('[data-act]')) changer(lire()); });
+    get('/eleve/journal').then((d) => { activites = d.activites; dessinerActivites(); }).catch(() => { zoneAct.innerHTML = '<p class="discret petit">Journal indisponible pour l’instant.</p>'; });
+    return { definirLectureSeule(v) { form.querySelectorAll('input, textarea').forEach((x) => { x.disabled = v; }); } };
+  };
+}
+
+const NIVEAUX_EMO = { observe: '👀', participe: '🤝', realise: '⭐' };
+const dateCourteFr = (j) => new Date(`${j}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+export function lectureMission(c, bloc, journal = []) {
+  const v = (x) => (x ? esc(x) : '<span class="discret">—</span>');
+  const comp = bloc.competences.filter((x) => (c.competences || []).includes(x.code)).map((x) => esc(x.libelle));
+  const acts = journal.filter((a) => (c.activites || []).includes(a.id));
+  return `<dl class="fiche-lecture">
+    <dt>Intitulé</dt><dd class="${c.titre ? '' : 'vide'}">${c.titre ? esc(c.titre) : 'manquant'}</dd>
+    <dt>Rôle de l’élève</dt><dd>${c.role ? ROLES[c.role] : '<span class="discret">—</span>'}</dd>
+    ${acts.length ? `<dt>Activités du journal liées</dt><dd>${acts.map((a) => `${NIVEAUX_EMO[a.niveau]} ${esc(a.texte)} (${esc(dateCourteFr(a.jour))})`).join('<br>')}</dd>` : ''}
+    ${TRAME_MISSION.map((t) => `<dt>${esc(t.lib)}</dt><dd class="${c[t.cle] || !t.requis ? '' : 'vide'}">${c[t.cle] ? esc(c[t.cle]) : (t.requis ? 'manquant' : '<span class="discret">—</span>')}</dd>`).join('')}
+    <dt>Compétences mobilisées</dt><dd>${comp.length ? comp.join('<br>') : '<span class="discret">—</span>'}</dd>
+  </dl>`;
+}
+
+// ---------------------------------------------------------------- Interview
+
+const MODES = { face: 'En face à face', telephone: 'Par téléphone', visio: 'En visio' };
+
+export function editeurInterview(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  const req = ' <span class="requis" title="obligatoire">*</span>';
+  const questions = etat.config.questionsInterview;
+  const rep = contenu.reponses || [];
+  zone.innerHTML = `
+    <div class="bandeau info"><p>🎤 Choisis un professionnel de l’entreprise (commercial, conseiller, responsable…) et demande-lui un rendez-vous de 20 minutes. Prends des notes pendant l’échange, puis rédige ses réponses ici.</p>
+      <p class="petit">🔒 Demande-lui son accord. Pas de nom de famille ; pour la rémunération, une fourchette ou « fixe + primes » suffit.</p></div>
+    <form class="carte" novalidate>
+      <div class="groupe-titre" style="margin-top:0">La personne interrogée</div>
+      <label class="champ"><span class="lib">Son poste${req}</span><input name="poste" maxlength="120" value="${esc(contenu.poste || '')}"${dis} placeholder="ex. Conseiller commercial"></label>
+      <label class="champ"><span class="lib">Son prénom (si elle est d’accord)</span><input name="prenom" maxlength="60" value="${esc(contenu.prenom || '')}"${dis}></label>
+      <div class="rangee" style="align-items:flex-start">
+        <label class="champ" style="flex:1"><span class="lib">Date</span><input name="date" maxlength="20" value="${esc(contenu.date || '')}"${dis} placeholder="JJ/MM"></label>
+        <label class="champ" style="flex:2"><span class="lib">Comment ?</span><select name="mode"${dis}><option value="">—</option>${Object.entries(MODES).map(([k, l]) => `<option value="${k}"${contenu.mode === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      </div>
+      <div class="groupe-titre">Les 10 questions</div>
+      ${questions.map((q, i) => `<label class="champ"><span class="lib">${i + 1}. ${esc(q)}</span>
+        <textarea name="r${i}" rows="3" maxlength="1500"${dis}>${esc(rep[i] || '')}</textarea></label>`).join('')}
+      <div class="groupe-titre">Et toi ?</div>
+      <label class="champ"><span class="lib">Ce que cette interview m’a appris${req}</span>
+        <textarea name="appris" rows="4" maxlength="1500"${dis} placeholder="Sur le métier, sur ce qu’il faut pour le faire, sur mon projet…">${esc(contenu.appris || '')}</textarea></label>
+    </form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => ({
+    poste: form.elements.poste.value, prenom: form.elements.prenom.value, date: form.elements.date.value, mode: form.elements.mode.value,
+    reponses: questions.map((_, i) => form.elements[`r${i}`].value), appris: form.elements.appris.value,
+  });
+  form.addEventListener('input', () => changer(lire()));
+  form.addEventListener('change', () => changer(lire()));
+  return { definirLectureSeule(v) { form.querySelectorAll('input, textarea, select').forEach((x) => { x.disabled = v; }); } };
+}
+
+export function lectureInterview(c) {
+  const q = etat.config.questionsInterview;
+  return `<dl class="fiche-lecture">
+    <dt>Personne interrogée</dt><dd>${c.poste ? esc(c.poste) : '<span class="discret">—</span>'}${c.prenom ? ` (${esc(c.prenom)})` : ''}${c.date ? ` · ${esc(c.date)}` : ''}${c.mode ? ` · ${MODES[c.mode]}` : ''}</dd>
+    ${q.map((x, i) => `<dt>${i + 1}. ${esc(x)}</dt><dd class="${(c.reponses || [])[i] ? '' : 'vide'}">${(c.reponses || [])[i] ? esc(c.reponses[i]) : 'pas de réponse'}</dd>`).join('')}
+    <dt>Ce que l’interview lui a appris</dt><dd class="${c.appris ? '' : 'vide'}">${c.appris ? esc(c.appris) : 'manquant'}</dd>
+  </dl>`;
+}
+
+// ---------------------------------------------------------------- Retour de l'IA
+
+export function relectureHtml(r, { pourProf = false } = {}) {
+  if (!r) return '';
+  return `<div class="relecture">
+    <p class="relecture-titre">🤖 ${pourProf ? 'Dernier retour de la relecture IA' : 'Retour de la relecture'} <span class="discret petit">· ${esc(new Date(r.cree_le.replace(' ', 'T') + 'Z').toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</span></p>
+    ${r.positif && r.positif.length ? `<p class="relecture-sous">👍 Ce qui va bien</p><ul>${r.positif.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${r.ameliorer && r.ameliorer.length ? `<p class="relecture-sous">🛠 À améliorer</p><ul>${r.ameliorer.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${r.question ? `<p class="relecture-sous">❓ Pour aller plus loin</p><p>${esc(r.question)}</p>` : ''}
+  </div>`;
 }
