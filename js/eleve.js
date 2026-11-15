@@ -5,6 +5,7 @@ import {
   $, esc, toast, action, modale, debounce, dateLongue, jourSemaine, ajouterJours, lundiDe, jourSem, dateHeure,
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
+import { afficherDossierComplet } from './complet.js';
 import { editeurIdentite, editeurIntroduction, editeurVeille, editeurMission, editeurInterview, editeurChecklist, editeurBilan, editeurProjet, editeurAutoeval, editeurOral, relectureHtml } from './rubriques.js';
 import { editeurOrganigramme } from './orga.js';
 
@@ -356,9 +357,10 @@ export async function dossier(vue) {
   const cal = etat.config.calendrier;
   vue.innerHTML = `<h1>📁 Mon dossier</h1>
     <p class="discret">Tout ce que tu prépares pendant ta PFMP, étape par étape.</p>
+    <a class="btn secondaire plein" href="#/dossier/complet" style="margin-bottom:1rem">📄 Voir tout mon dossier (et l’enregistrer en PDF)</a>
     ${cal.map((e) => `<div class="carte"><h2>${esc(e.titre)}</h2>
       ${e.sections.map((cle) => tacheHtml(cle, d.sections[cle])).join('')}
-      ${e.bientot.map((t) => `<div class="tache bientot"><span class="tache-ico">⏳</span><span class="tache-txt">${esc(t)}<small>Bientôt dans Ma PFMP</small></span></div>`).join('')}
+      ${e.bientot.filter((t) => !/Pearltrees/.test(t)).map((t) => `<div class="tache bientot"><span class="tache-ico">⏳</span><span class="tache-txt">${esc(t)}<small>Bientôt dans Ma PFMP</small></span></div>`).join('')}
     </div>`).join('')}`;
 }
 
@@ -485,4 +487,12 @@ export async function rubrique(vue, cle) {
     sauverBientot.annuler();
     await sauver();
   };
+}
+
+// ---------------------------------------------------------------- Dossier complet
+
+export async function complet(vue) {
+  const d = await get('/eleve/dossier-complet');
+  vue.innerHTML = '<a class="retour" href="#/dossier">‹ Mon dossier</a><div data-dc></div>';
+  afficherDossierComplet(vue.querySelector('[data-dc]'), d);
 }

@@ -365,3 +365,36 @@ fieldset.attitude legend, fieldset.diapo-edit legend { padding: 0 .35rem; }
 .choix-petit { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
 .choix-petit label { min-width: 0; }
 @media (min-width: 640px) { .choix-petit { grid-template-columns: repeat(4, 1fr); } }
+
+/* Dossier complet */
+.dossier-complet .dc-couverture { background: var(--carte, #fff); border-radius: 16px; padding: 2rem 1.5rem; text-align: center; margin-bottom: 1.5rem; }
+.dc-couverture h1 { font-size: 2rem; margin: .5rem 0; }
+.dc-sur { text-transform: uppercase; letter-spacing: .08em; font-size: .8rem; color: var(--encre-douce); }
+.dc-ent { font-size: 1.25rem; font-weight: 700; color: var(--primaire); }
+.dc-sommaire { text-align: left; max-width: 22rem; margin: 1.5rem auto 0; }
+.dc-partie { background: var(--carte, #fff); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.dc-partie > h2 { color: var(--primaire); border-bottom: 2px solid var(--primaire); padding-bottom: .4rem; }
+.dc-rubrique { margin-top: 1.25rem; }
+.dc-rubrique h3 { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.dc-rubrique h4 { margin: 1rem 0 .4rem; }
+.dc-manques { color: var(--rouge); font-size: .9rem; }
+.dc-table td:nth-child(2), .dc-table td:nth-child(3) { white-space: nowrap; }
+@media print {
+  body.imprime .dossier-complet { font-size: 11pt; color: #000; }
+  body.imprime .dc-couverture { min-height: 24cm; display: flex; flex-direction: column; justify-content: center; break-after: page; page-break-after: always; padding: 0; }
+  body.imprime .dc-couverture h1 { font-size: 30pt; }
+  body.imprime .dc-partie { break-before: page; page-break-before: always; padding: 0; border-radius: 0; }
+  body.imprime .dc-partie:first-of-type { break-before: auto; }
+  body.imprime .dc-rubrique { break-inside: auto; }
+  body.imprime .dc-rubrique h3, body.imprime .dc-rubrique h4 { break-after: avoid; }
+  body.imprime .dossier-complet tr, body.imprime .dossier-complet .diapo { break-inside: avoid; }
+  body.imprime .dossier-complet .diapos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  body.imprime .dossier-complet .diapo { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 9pt; }
+  body.imprime .dossier-complet .orga-zone { overflow: visible; }
+}
+@media print {
+  body.imprime .dossier-complet .diapo { width: auto; padding: 14px 18px; border-radius: 6px; page-break-after: auto; break-after: auto; }
+  body.imprime .dossier-complet .diapo h3 { font-size: 13pt; }
+  body.imprime .dossier-complet .diapo ul { font-size: 9pt; }
+  body.imprime .dossier-complet .diapo-num { font-size: 8pt; }
+}

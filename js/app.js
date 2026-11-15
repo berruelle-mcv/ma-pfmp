@@ -11,6 +11,7 @@ const ROUTES = {
     [/^\/$/, eleve.accueil, 'accueil'],
     [/^\/journal(?:\/(\d{4}-\d{2}-\d{2}))?$/, eleve.journal, 'journal'],
     [/^\/dossier$/, eleve.dossier, 'dossier'],
+    [/^\/dossier\/complet$/, eleve.complet, 'dossier'],
     [/^\/dossier\/(identite|organigramme|introduction|veille|interview|mission_b[1-4]|checklist|bilan|projet|autoeval|oral)$/, eleve.rubrique, 'dossier'],
     [/^\/blocs$/, eleve.blocs, 'blocs'],
   ],

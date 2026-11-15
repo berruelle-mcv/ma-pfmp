@@ -7,6 +7,7 @@ import {
 } from './ui.js';
 import { lectureIdentite, lectureIntroduction, lectureVeille, lectureMission, lectureInterview, lectureChecklist, lectureBilan, lectureProjet, lectureAutoeval, lectureOral, relectureHtml } from './rubriques.js';
 import { arbreHtml } from './orga.js';
+import { afficherDossierComplet } from './complet.js';
 import { commentaireHtml } from './eleve.js';
 
 const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille', 'interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4', 'checklist', 'bilan', 'projet', 'autoeval', 'oral'];
@@ -87,7 +88,7 @@ function carteEleve(e, referent) {
 
 // ---------------------------------------------------------------- Fiche élève
 
-const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche'], ['organigramme', 'Orga'], ['introduction', 'Intro'], ['veille', 'Veille'], ['interview', 'Interview'], ['mission_b1', 'Mission B1'], ['mission_b2', 'Mission B2'], ['mission_b3', 'Mission B3'], ['mission_b4', 'Mission B4'], ['checklist', 'Check-list'], ['bilan', 'Bilan'], ['projet', 'Projet'], ['autoeval', 'Auto-éval.'], ['oral', 'Oral'], ['compte', 'Compte']];
+const ONGLETS = [['suivi', 'Suivi'], ['journal', 'Journal'], ['identite', 'Fiche'], ['organigramme', 'Orga'], ['introduction', 'Intro'], ['veille', 'Veille'], ['interview', 'Interview'], ['mission_b1', 'Mission B1'], ['mission_b2', 'Mission B2'], ['mission_b3', 'Mission B3'], ['mission_b4', 'Mission B4'], ['checklist', 'Check-list'], ['bilan', 'Bilan'], ['projet', 'Projet'], ['autoeval', 'Auto-éval.'], ['oral', 'Oral'], ['complet', '📄 Dossier complet'], ['compte', 'Compte']];
 
 export async function fiche(vue, id, onglet = 'suivi') {
   if (!ONGLETS.some(([k]) => k === onglet)) onglet = 'suivi';
@@ -109,6 +110,7 @@ export async function fiche(vue, id, onglet = 'suivi') {
     if (onglet === 'suivi') zone.innerHTML = suiviHtml();
     else if (onglet === 'journal') zone.innerHTML = journalHtml();
     else if (onglet === 'compte') zone.innerHTML = compteHtml();
+    else if (onglet === 'complet') afficherDossierComplet(zone, d, { pourProf: true });
     else zone.innerHTML = rubriqueHtml(onglet);
   }
 
