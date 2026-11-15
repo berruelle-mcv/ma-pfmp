@@ -5,10 +5,12 @@ import { get } from './api.js';
 
 export const ANNUAIRE = 'https://annuaire-entreprises.data.gouv.fr/';
 
+// Catégories d'entreprises de l'INSEE.
 const TYPES_ORGA = [
-  'Administration', 'Association', 'Entreprise artisanale (moins de 10 salariés)', 'Petite entreprise (10 à 49 salariés)',
-  'Moyenne entreprise (50 à 249 salariés)', 'ETI (250 à 4 999 salariés)', 'Grande entreprise (5 000 salariés et plus)',
+  'Microentreprise (moins de 10 salariés)', 'Petite entreprise (10 à 49 salariés)', 'Moyenne entreprise (50 à 249 salariés)',
+  'Entreprise de taille intermédiaire (250 à 4 999 salariés)', 'Grande entreprise (5 000 salariés et plus)', 'Association', 'Administration',
 ];
+const RATTACHEMENTS = ['Entreprise indépendante', 'Franchise', 'Succursale d’un réseau ou d’une enseigne', 'Autre'];
 
 // Fiche d'identité adaptée à l'option B.
 export const FICHE_IDENTITE = [
@@ -29,6 +31,7 @@ export const FICHE_IDENTITE = [
   ] },
   { groupe: 'Organisation', champs: [
     { cle: 'type_organisation', lib: 'Type d’organisation', requis: true, type: 'select', options: TYPES_ORGA },
+    { cle: 'rattachement', lib: 'Rattachement', type: 'select', options: RATTACHEMENTS, aide: 'Indépendante, ou rattachée à un réseau (franchise, succursale) ?' },
     { cle: 'effectif', lib: 'Effectif (nombre de salariés)', max: 60 },
     { cle: 'horaires', lib: 'Horaires d’ouverture', type: 'zone', lignes: 2, max: 250 },
   ] },
@@ -502,8 +505,8 @@ export function editeurOral(zone, contenu, { lectureSeule, changer }) {
   const D = etat.config.diaposOral;
   const missions = etat.config.blocs.map((b) => [`mission_${b.code.toLowerCase()}`, etat.config.sections[`mission_${b.code.toLowerCase()}`].titre]);
   zone.innerHTML = `
-    <div class="bandeau info"><p>🎤 Ton oral : 5 minutes de présentation, puis 5 minutes d’échange. Prépare 4 diapos, avec <b>5 informations au plus</b> par diapo : des mots-clés, pas des phrases. Tu les recopieras ensuite dans ton diaporama sur Pearltrees.</p></div>
-    ${lectureSeule ? '' : '<div class="rangee" style="margin-bottom:1rem"><button class="btn secondaire petit" type="button" data-preremplir>✨ Remplir à partir de mon dossier</button><button class="btn neutre petit" type="button" data-apercu>👁 Voir mes diapos</button></div>'}
+    <div class="bandeau info"><p>🎤 Ton oral : 5 minutes de présentation, puis 5 minutes d’échange. Prépare 4 diapos, avec <b>5 informations au plus</b> par diapo : des mots-clés, pas des phrases. Tu pourras ensuite les télécharger en PowerPoint pour les personnaliser.</p></div>
+    ${lectureSeule ? '' : '<div class="rangee" style="margin-bottom:1rem"><button class="btn secondaire petit" type="button" data-preremplir>✨ Remplir à partir de mon dossier</button><button class="btn neutre petit" type="button" data-apercu>👁 Voir mes diapos</button><button class="btn neutre petit" type="button" data-pptx>📥 Télécharger en PowerPoint</button></div>'}
     <form class="carte" novalidate>
       <label class="champ"><span class="lib">La fiche mission que je présente</span>
         <select name="mission_choisie"${dis}><option value="">— Choisir —</option>${missions.map(([k, t]) => `<option value="${k}"${contenu.mission_choisie === k ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
@@ -547,6 +550,17 @@ export function editeurOral(zone, contenu, { lectureSeule, changer }) {
       changer(lire());
       toast('Prérempli à partir de ton dossier. Raccourcis maintenant chaque information : quelques mots suffisent !', 'ok', 6000);
     } finally { bPre.disabled = false; }
+  });
+  const bPp = zone.querySelector('[data-pptx]');
+  if (bPp) bPp.addEventListener('click', async () => {
+    bPp.disabled = true;
+    const avant = bPp.textContent;
+    bPp.textContent = 'Fabrication…';
+    try {
+      const { telechargerDiapos } = await import('./pptx.js');
+      await telechargerDiapos(lire());
+      toast('Diaporama prêt ✓ Ouvre-le avec PowerPoint, Google Slides ou LibreOffice pour le personnaliser.', 'ok', 6000);
+    } catch (e) { toast(e.message || 'Le diaporama n’a pas pu être fabriqué.', 'erreur', 6000); } finally { bPp.disabled = false; bPp.textContent = avant; }
   });
   const bAp = zone.querySelector('[data-apercu]');
   if (bAp) bAp.addEventListener('click', () => {

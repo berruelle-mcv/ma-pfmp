@@ -421,3 +421,13 @@ fieldset.attitude legend, fieldset.diapo-edit legend { padding: 0 .35rem; }
   body.imprime .q-interview { break-inside: avoid; margin-bottom: 6px; }
   body.imprime .q-interview .lignes { height: 62px; background: repeating-linear-gradient(transparent 0 19px, #bbb 19px 20px); }
 }
+
+.champ-secret { position: relative; display: block; }
+.champ-secret input { padding-right: 3rem; }
+.voir-secret { position: absolute; right: .35rem; top: 50%; transform: translateY(-50%); background: none; border: 0; font-size: 1.25rem; padding: .4rem; cursor: pointer; line-height: 1; }
+
+/* 1.5 : essais du journal, comptes */
+.bandeau.essai { background: #FFF6E5; border-color: #F2C27A; }
+.semaine button.essai b { opacity: .55; }
+.actions-compte { white-space: nowrap; }
+.actions-compte .btn-icone { font-size: 1.05rem; }

@@ -83,17 +83,26 @@ function afficherConnexion() {
       <label class="champ"><span class="lib">Identifiant</span>
         <input name="identifiant" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="prenom.nom" required></label>
       <label class="champ"><span class="lib">Code</span>
-        <input name="secret" type="password" autocomplete="current-password" autocapitalize="characters" required>
+        <span class="champ-secret"><input name="secret" type="password" autocomplete="current-password" autocapitalize="characters" required>
+          <button type="button" class="voir-secret" data-voir aria-label="Afficher le code" title="Afficher le code">👁</button></span>
         <span class="aide">Le code donné par ton professeur (les professeurs saisissent leur mot de passe).</span></label>
       <button class="btn plein" type="submit">Se connecter</button>
     </form>
     <p class="discret petit" style="text-align:center">Code perdu ? Demande-en un nouveau à ton professeur.</p>
     <p class="petit" style="text-align:center"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>
   </div>`;
+  $('[data-voir]').addEventListener('click', (e) => {
+    const champ = $('#form-connexion [name=secret]');
+    const visible = champ.type === 'password';
+    champ.type = visible ? 'text' : 'password';
+    e.currentTarget.textContent = visible ? '🙈' : '👁';
+    e.currentTarget.setAttribute('aria-label', visible ? 'Masquer le code' : 'Afficher le code');
+    champ.focus();
+  });
   $('#form-connexion').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target;
-    action(f.querySelector('button'), async () => {
+    action(f.querySelector('button[type=submit]'), async () => {
       const r = await post('/connexion', { identifiant: f.identifiant.value.trim(), secret: f.secret.value.trim() });
       definirJeton(r.jeton);
       etat.utilisateur = r.utilisateur;
@@ -126,7 +135,7 @@ export function afficherDonnees() {
     <p><b>Pourquoi ?</b> Pour t’accompagner pendant ta PFMP, suivre ton travail et préparer ton évaluation.</p>
     <p><b>Qui les voit ?</b> Toi et tes professeurs, M. &amp; Mme Berruelle. Personne d’autre, et rien n’est public. Les données sont stockées sur un serveur situé en France.</p>
     <p><b>Relecture par l’IA.</b> Quand <i>tu</i> cliques sur « Faire relire mon travail », le texte de la rubrique (sans ton nom) est envoyé au service d’intelligence artificielle d’Anthropic pour obtenir des conseils. Ce texte n’est pas utilisé pour entraîner l’IA. C’est pour cela qu’il ne faut jamais écrire d’informations confidentielles.</p>
-    <p><b>Combien de temps ?</b> Tes données sont supprimées à la fin de l’année scolaire (été 2027), une fois ton dossier déposé sur Pearltrees.</p>
+    <p><b>Combien de temps ?</b> Tes données sont conservées pendant ta scolarité au lycée, comme ton portfolio Pearltrees, puis supprimées au plus tard un an après ton bac.</p>
     <p><b>Tes droits.</b> Tu peux demander à tes professeurs de consulter, corriger ou supprimer tes données.</p></div>`);
 }
 document.addEventListener('click', (e) => { if (e.target.closest('[data-donnees]')) afficherDonnees(); });

@@ -21,6 +21,7 @@ async function pdfMake() {
   await chargement;
   return window.pdfMake;
 }
+const dimensionsImage = (src) => new Promise((ok) => { const i = new Image(); i.onload = () => ok({ l: i.naturalWidth || 4, h: i.naturalHeight || 3 }); i.onerror = () => ok({ l: 4, h: 3 }); i.src = src; });
 const enDataUrl = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
 
 // ---------------------------------------------------------------- Petites briques de mise en page
@@ -150,7 +151,15 @@ async function construire(d, { prefixe, logo }) {
   const commence = (cle) => S[cle] && (S[cle].modifie_le || S[cle].statut !== 'brouillon');
   const nom = `${d.eleve.prenom} ${d.eleve.nom.toUpperCase()}`;
   const id = C('identite');
-  const acts = [...(d.journal.activites || [])].sort((a, b) => (a.jour + a.moment).localeCompare(b.jour + b.moment));
+  // Dates de stage de l'élève ; ce qui est noté avant son premier jour est un essai et ne figure pas dans le dossier.
+  const stage = (d.eleve && d.eleve.stage) || { debut: p.debut, fin: p.fin };
+  const acts = [...(d.journal.activites || [])].filter((a) => a.jour >= stage.debut).sort((a, b) => (a.jour + a.moment).localeCompare(b.jour + b.moment));
+  const absencesStage = (d.journal.absences || []).filter((a) => a.jour >= stage.debut && a.jour <= stage.fin);
+  const joursStage = joursOuvres(stage.debut, stage.fin);
+  const joursEntreprise = joursStage - absencesStage.length / 2;
+  const nbJours = (n) => String(n).replace('.', ',');
+  // Compétences cochées dans les fiches mission
+  const codesMissions = new Set(cfg.blocs.flatMap((b) => (C(`mission_${b.code.toLowerCase()}`).competences || [])));
 
   // Images du dossier, converties pour le PDF.
   const imgs = {};
@@ -175,7 +184,14 @@ async function construire(d, { prefixe, logo }) {
     { text: `${p.libelleClasse} · ${p.classe}`, alignment: 'center', fontSize: 11, margin: [0, 4, 0, 20] },
   );
   if (facade) {
-    contenu.push({ image: facade.data, fit: [380, 230], alignment: 'center' }, { canvas: [{ type: 'rect', x: 57, y: 0, w: 380, h: 4, color: NAVY }] });
+    // Photo encadrée comme un tirage (marge blanche), trait bleu à sa largeur.
+    const dim = await dimensionsImage(facade.data);
+    const r = Math.min(360 / dim.l, 215 / dim.h);
+    const pl = dim.l * r; const ph = dim.h * r; const cadreL = pl + 16; const x0 = (LARGEUR - cadreL) / 2;
+    contenu.push({ columns: [{ width: '*', text: '' }, { width: 'auto', table: { body: [[{ image: facade.data, width: pl, height: ph }]] },
+      layout: { hLineColor: () => '#C5D0E3', vLineColor: () => '#C5D0E3', hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 8, paddingBottom: () => 8 } },
+    { width: '*', text: '' }], margin: [0, 10, 0, 0] },
+    { canvas: [{ type: 'rect', x: x0, y: 0, w: cadreL, h: 4, color: NAVY }], margin: [0, 6, 0, 0] });
   } else {
     contenu.push({ canvas: [{ type: 'rect', x: 157, y: 0, w: 180, h: 4, color: NAVY }], margin: [0, 30, 0, 10] });
   }
@@ -184,8 +200,8 @@ async function construire(d, { prefixe, logo }) {
   if (sousEnt) contenu.push({ text: sousEnt, alignment: 'center', color: GRIS });
   const lignesGarde = [
     id.tuteur_nom ? ['Tuteur', [id.tuteur_nom, id.tuteur_fonction].filter(Boolean).join(', ')] : null,
-    ['Dates', `du ${dateLongue(p.debut).replace(/ \d{4}$/, '')} au ${dateLongue(p.fin)}`],
-    ['Durée', `${Math.round(joursOuvres(p.debut, p.fin) / 5)} semaines (${joursOuvres(p.debut, p.fin)} jours)`],
+    ['Dates', `du ${dateLongue(stage.debut).replace(/ \d{4}$/, '')} au ${dateLongue(stage.fin)}`],
+    ['Durée', `${nbJours(joursEntreprise)} jours en entreprise`],
   ].filter(Boolean);
   contenu.push(
     { columns: [{ width: '*', text: '' }, { width: 'auto', table: { body: lignesGarde.map(([a, b]) => [{ text: a, style: 'q' }, { text: b }]) }, layout: 'noBorders' }, { width: '*', text: '' }], margin: [0, 18, 0, 0] },
@@ -194,7 +210,7 @@ async function construire(d, { prefixe, logo }) {
   );
 
   // ---------- Sommaire et chiffres
-  const codesTravailles = new Set(acts.map((a) => a.competence).filter(Boolean));
+  const codesTravailles = new Set([...acts.map((a) => a.competence).filter(Boolean), ...codesMissions]);
   const blocsCouverts = cfg.blocs.filter((b) => b.competences.some((c) => codesTravailles.has(c.code))).length;
   const nb = { observe: 0, participe: 0, realise: 0 };
   acts.forEach((a) => { nb[a.niveau] = (nb[a.niveau] || 0) + 1; });
@@ -211,7 +227,7 @@ async function construire(d, { prefixe, logo }) {
     { text: 'Sommaire', fontSize: 22, bold: true, color: NAVY, pageBreak: 'before', margin: [0, 0, 0, 12] },
     { toc: { numberStyle: { color: NAVY } } },
     { text: 'Ma PFMP en chiffres', fontSize: 16, bold: true, color: NAVY, margin: [0, 28, 0, 10] },
-    { table: { widths: ['*', '*', '*', '*'], body: [[tuile(String(joursOuvres(p.debut, p.fin)), 'jours de PFMP'), tuile(String(acts.length), 'activités notées'),
+    { table: { widths: ['*', '*', '*', '*'], body: [[tuile(nbJours(joursEntreprise), 'jours en entreprise'), tuile(String(acts.length), 'activités notées'),
       tuile(`${codesTravailles.size} / ${nbComp}`, 'compétences travaillées'), tuile(`${blocsCouverts} / ${cfg.blocs.length}`, 'blocs couverts')]] },
     layout: { hLineWidth: () => 0, vLineWidth: () => 3, vLineColor: () => '#fff' } },
     { text: 'Répartition de mes activités', style: 'q', margin: [0, 14, 0, 4] },
@@ -219,7 +235,7 @@ async function construire(d, { prefixe, logo }) {
     { columns: [
       { text: `Observé : ${nb.observe}${pct('observe')}`, fontSize: 9 },
       { text: `Avec participation : ${nb.participe}${pct('participe')}`, fontSize: 9, alignment: 'center' },
-      { text: `Réalisé seul·e : ${nb.realise}${pct('realise')}`, fontSize: 9, alignment: 'right' },
+      { text: `Réalisé seul : ${nb.realise}${pct('realise')}`, fontSize: 9, alignment: 'right' },
     ], margin: [0, 4, 0, 0] },
   );
 
@@ -278,18 +294,18 @@ async function construire(d, { prefixe, logo }) {
   // ---------- 3. Mes activités et mes missions
   contenu.push(...ouverture(3, 'Mes activités et mes missions', 'Ce que j’ai observé, ce à quoi j’ai participé et ce que j’ai réalisé, bloc par bloc.'));
   contenu.push(titreRubrique('3.1', 'Les compétences que j’ai travaillées'));
-  contenu.push({ text: `D’après mon journal : nombre d’activités par compétence et par rôle (${acts.length} activités notées).`, color: GRIS, fontSize: 9.5, margin: [0, 0, 0, 8] });
+  contenu.push({ text: `D’après mon journal (nombre d’activités par rôle, ${acts.length} activités notées) et mes fiches mission.`, color: GRIS, fontSize: 9.5, margin: [0, 0, 0, 8] });
   for (const b of cfg.blocs) {
     const lignes = b.competences.map((c) => {
       const a = acts.filter((x) => x.competence === c.code);
       const n = (k) => a.filter((x) => x.niveau === k).length;
-      const vide = !a.length;
+      const vide = !a.length && !codesMissions.has(c.code);
       const cell = (k) => ({ text: n(k) || '', alignment: 'center', bold: true, color: NAVY });
-      return [{ text: c.libelle, fontSize: 9, color: vide ? '#9CA3AF' : '#1F2937' }, cell('observe'), cell('participe'), cell('realise')];
+      return [{ text: c.libelle, fontSize: 9, color: vide ? '#9CA3AF' : '#1F2937' }, cell('observe'), cell('participe'), cell('realise'), codesMissions.has(c.code) ? { ...coche(), margin: [16, 2, 0, 0] } : { text: '' }];
     });
     contenu.push({
-      table: { headerRows: 1, widths: ['*', 52, 52, 52], body: [
-        [{ text: `${b.code} — ${b.titre}`, bold: true, color: '#fff', fontSize: 9.5 }, ...['Observé', 'Participé', 'Réalisé'].map((t) => ({ text: t, color: '#fff', fontSize: 8, alignment: 'center' }))],
+      table: { headerRows: 1, widths: ['*', 50, 50, 50, 46], body: [
+        [{ text: `${b.code} — ${b.titre}`, bold: true, color: '#fff', fontSize: 9.5 }, ...['Observé', 'Participé', 'Réalisé', 'Fiche mission'].map((t) => ({ text: t, color: '#fff', fontSize: 8, alignment: 'center' }))],
         ...lignes,
       ] },
       layout: { ...cadre, paddingTop: () => 4, paddingBottom: () => 4, fillColor: (r) => (r === 0 ? NAVY : null) },
@@ -376,8 +392,8 @@ async function construire(d, { prefixe, logo }) {
   } else contenu.push(nonComplete);
 
   // ---------- 6. Annexes
-  contenu.push(...ouverture(6, 'Annexes', 'La trame de mon oral et mon journal de bord.'));
-  contenu.push(titreRubrique('6.1', 'Trame de mon oral'));
+  contenu.push(...ouverture(6, 'Annexes', 'Mes diapos pour l’oral et mon journal de bord.'));
+  contenu.push(titreRubrique('6.1', 'Mes diapos pour l’oral'));
   const oral = C('oral');
   if (commence('oral')) {
     const diapo = (x, i) => {
@@ -395,7 +411,7 @@ async function construire(d, { prefixe, logo }) {
   } else contenu.push(nonComplete);
 
   contenu.push(titreRubrique('6.2', 'Mon journal de bord'));
-  const abs = (d.journal.absences || []).map((a) => ({ ...a, absence: true }));
+  const abs = absencesStage.map((a) => ({ ...a, absence: true }));
   const lignes = [...acts, ...abs].sort((a, b) => (a.jour + (a.moment === 'matin' ? 0 : 1)).localeCompare(b.jour + (b.moment === 'matin' ? 0 : 1)));
   if (lignes.length) {
     let dernier = '';

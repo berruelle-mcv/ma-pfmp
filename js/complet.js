@@ -61,7 +61,7 @@ export function dossierCompletHtml(d, { pourProf = false } = {}) {
         ${competencesHtml(acts)}</section>${missions}`],
     ['Le professionnel', rubrique('interview', lectureInterview)],
     ['Mon bilan', rubrique('bilan', lectureBilan) + rubrique('projet', lectureProjet) + rubrique('autoeval', lectureAutoeval)],
-    ['Annexe : trame de mon oral', rubrique('oral', (c) => `<div class="diapos">${diaposHtml(c)}</div>`)],
+    ['Annexe : mes diapos pour l’oral', rubrique('oral', (c) => `<div class="diapos">${diaposHtml(c)}</div>`)],
   ];
 
   return `<div class="dossier-complet">

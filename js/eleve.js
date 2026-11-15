@@ -15,7 +15,7 @@ const ICONES = { identite: '🏢', organigramme: '🧩', introduction: '✍️',
 const DESCRIPTIONS = {
   identite: 'Les informations clés de ton entreprise',
   organigramme: 'Qui fait quoi, et où tu te situes',
-  introduction: 'Comment ton stage a commencé (5 à 10 lignes)',
+  introduction: 'Comment s’est passée ton arrivée (4 courtes réponses)',
   veille: 'Concurrents et veille de l’entreprise : à commencer en semaine 1, à finir en semaine 2',
   interview: '10 questions à un professionnel de l’entreprise',
   mission_b1: 'Une mission pour « Conseiller et vendre »',
@@ -29,8 +29,11 @@ const DESCRIPTIONS = {
   oral: 'Tes 4 diapos pour l’oral de janvier (5 + 5 minutes)',
 };
 
+// Dates de stage de l'élève (les siennes si elles diffèrent des dates officielles).
+export const monStage = () => (etat.utilisateur && etat.utilisateur.stage) || { debut: etat.config.pfmp.debut, fin: etat.config.pfmp.fin };
+
 function phase(jour) {
-  const p = etat.config.pfmp;
+  const p = monStage();
   if (jour < p.debut) return 'avant';
   if (jour > p.fin) return 'apres';
   return 'pendant';
@@ -65,10 +68,31 @@ function bandeauInstallation() {
   return '';
 }
 
+function modifierMesDates() {
+  const p = etat.config.pfmp;
+  const st = monStage();
+  const fen = modale('📅 Les dates de mon stage', `<form>
+    <p class="petit">Les dates officielles sont du <b>${esc(dateLongue(p.debut))}</b> au <b>${esc(dateLongue(p.fin))}</b>. Change-les seulement si ton stage commence plus tard ou finit plus tôt.</p>
+    <div class="rangee"><label class="champ" style="flex:1"><span class="lib">Premier jour</span><input type="date" name="debut" required min="${p.debut}" max="${p.finPossible}" value="${st.debut}"></label>
+    <label class="champ" style="flex:1"><span class="lib">Dernier jour</span><input type="date" name="fin" required min="${p.debut}" max="${p.finPossible}" value="${st.fin}"></label></div>
+    <button class="btn plein" type="submit">Enregistrer</button>
+    <button class="btn-lien petit" type="button" data-officielles style="margin-top:.5rem">Remettre les dates officielles</button></form>`);
+  const f = fen.el.querySelector('form');
+  const envoyer = (debut, fin) => action(f.querySelector('[type=submit]'), async () => {
+    const r = await put('/eleve/stage', { debut, fin });
+    etat.utilisateur.stage = r.stage;
+    fen.fermer();
+    toast('Dates enregistrées ✓', 'ok');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+  f.addEventListener('submit', (ev) => { ev.preventDefault(); envoyer(f.debut.value, f.fin.value); });
+  f.querySelector('[data-officielles]').addEventListener('click', () => envoyer(null, null));
+}
+
 export async function accueil(vue) {
   const d = await get('/eleve/accueil');
   const u = etat.utilisateur;
-  const p = etat.config.pfmp;
+  const p = { ...etat.config.pfmp, ...monStage() };
   const ph = phase(d.jour);
   const nbJours = Math.round((new Date(p.debut) - new Date(d.jour)) / 86400000);
   const numSemaine = Math.floor((new Date(lundiDe(d.jour)) - new Date(p.debut)) / (7 * 86400000)) + 1;
@@ -108,18 +132,23 @@ export async function accueil(vue) {
 
   const n = d.journal.niveaux;
   vue.innerHTML = `
-    <div class="salut"><h1>Bonjour ${esc(u.prenom)} 👋</h1><p>${esc(sousTitre)}</p></div>
+    <div class="salut"><h1>Bonjour ${esc(u.prenom)} 👋</h1><p>${esc(sousTitre)}</p>
+      <p class="petit discret" style="margin:.25rem 0 0">📅 Mon stage : du ${esc(dateLongue(p.debut))} au ${esc(dateLongue(p.fin))} · <button class="btn-lien petit" type="button" data-mes-dates>modifier</button></p></div>
     ${bandeauInstallation()}
     ${blocCommentaires}
     ${carteJournal}
     ${blocEtape}
-    ${ph !== 'avant' ? `<a class="carte lien" href="#/blocs"><h2 style="margin:0">🎯 Mes blocs</h2>
+    ${ph !== 'avant' ? `<a class="carte lien" href="#/blocs"><h2 style="margin:0">🎯 Mes compétences</h2>
       <p class="discret petit" style="margin:.25rem 0 0">${NIVEAUX.observe.emoji} ${n.observe} · ${NIVEAUX.participe.emoji} ${n.participe} · ${NIVEAUX.realise.emoji} ${n.realise} — objectif : au moins une activité par bloc</p>
       ${blocsMiniHtml(d.journal.competences)}</a>` : ''}
-    ${ph === 'avant' ? '<div class="bandeau info"><p>Tu peux déjà commencer ta fiche d’identité si tu connais ton entreprise. Le journal s’ouvrira le premier jour de ta PFMP.</p></div>' : ''}
+    ${ph === 'avant' ? `<div class="carte"><h2 style="margin:0">📓 Mon journal</h2>
+      <p class="petit" style="margin:.4rem 0 .75rem">Entraîne-toi dès maintenant à noter une activité : avant le ${esc(dateLongue(p.debut))}, c’est un <b>essai</b> qui ne compte pas dans ton dossier.</p>
+      <a class="btn secondaire plein" href="#/journal">Essayer mon journal</a></div>
+      <div class="bandeau info"><p>Tu peux déjà commencer ta fiche d’identité si tu connais ton entreprise.</p></div>` : ''}
     <p class="petit" style="text-align:center;margin-top:1.5rem"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>`;
 
   vue.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-mes-dates]')) { modifierMesDates(); return; }
     if (e.target.closest('[data-installer]') && etat.invitationInstall) {
       etat.invitationInstall.prompt();
       await etat.invitationInstall.userChoice.catch(() => {});
@@ -150,18 +179,18 @@ export async function journal(vue, jourDemande) {
   let absences = d.absences;
   const auj = d.jour;
 
-  if (auj < p.debut) {
-    vue.innerHTML = `<h1>📓 Mon journal</h1><div class="carte"><p>Ton journal s’ouvrira le <b>${dateLongue(p.debut)}</b>, premier jour de ta PFMP.</p>
-      <p>Chaque jour, matin et après-midi, tu noteras en quelques minutes ce que tu as fait ou observé.</p></div>${legendeNiveaux()}`;
-    return;
-  }
-  const max = auj < p.fin ? auj : p.fin;
-  let jour = jourDemande && jourDemande >= p.debut && jourDemande <= max ? jourDemande : max;
+  const st = d.stage || monStage();
+  if (d.stage && etat.utilisateur) etat.utilisateur.stage = d.stage;
+  const ouverture = p.ouvertureJournal || p.debut;
+  const finJournal = st.fin > p.fin ? st.fin : p.fin;
+  const max = auj < finJournal ? auj : finJournal;
+  let jour = jourDemande && jourDemande >= ouverture && jourDemande <= max ? jourDemande : max;
+  const essai = (j) => j < st.debut;
 
   const couverture = (j, m) => {
     if (absences.some((a) => a.jour === j && a.moment === m)) return 'abs';
     if (toutes().some((a) => a.jour === j && a.moment === m)) return 'ok';
-    return (j < auj && jourSem(j) >= 1 && jourSem(j) <= 5) ? 'manque' : '';
+    return (j < auj && j >= st.debut && j <= st.fin && jourSem(j) >= 1 && jourSem(j) <= 5) ? 'manque' : '';
   };
 
   function dessiner() {
@@ -174,12 +203,13 @@ export async function journal(vue, jourDemande) {
       ${com.commentaires.length ? `<details class="carte" open><summary><b>💬 Messages de tes professeurs sur ton journal (${com.commentaires.length})</b></summary>
         <div style="margin-top:.75rem">${com.commentaires.map(commentaireHtml).join('')}</div></details>` : ''}
       <div class="jour-nav">
-        <button class="btn-icone" type="button" data-aller="-1" aria-label="Jour précédent"${jour <= p.debut ? ' disabled' : ''}>‹</button>
+        <button class="btn-icone" type="button" data-aller="-1" aria-label="Jour précédent"${jour <= ouverture ? ' disabled' : ''}>‹</button>
         <h1>${esc(dateLongue(jour))}</h1>
         <button class="btn-icone" type="button" data-aller="1" aria-label="Jour suivant"${jour >= max ? ' disabled' : ''}>›</button>
       </div>
-      <div class="semaine">${semaine.map((j) => `<button type="button" data-jour="${j}" class="${j === jour ? 'choisi' : ''}"${j < p.debut || j > max ? ' disabled' : ''}>
+      <div class="semaine">${semaine.map((j) => `<button type="button" data-jour="${j}" class="${j === jour ? 'choisi' : ''}${essai(j) ? ' essai' : ''}"${j < ouverture || j > max ? ' disabled' : ''}>
         ${esc(jourSemaine(j))}<b>${Number(j.slice(8))}</b><i class="${couverture(j, 'matin')}"></i><i class="${couverture(j, 'aprem')}"></i></button>`).join('')}</div>
+      ${essai(jour) ? `<div class="bandeau essai"><p>🧪 <b>Jour d’essai</b> : ton stage commence le ${esc(dateLongue(st.debut))}. Entraîne-toi librement : ce que tu notes avant cette date ne compte pas dans ton dossier, et tu peux le supprimer quand tu veux.</p></div>` : ''}
       ${demiJourneeHtml('matin')}
       ${demiJourneeHtml('aprem')}
       ${legendeNiveaux()}
@@ -196,10 +226,10 @@ export async function journal(vue, jourDemande) {
       corps = `${liste.map((a) => `
         <div class="activite"><span class="niv" title="${NIVEAUX[a.niveau].lib}">${NIVEAUX[a.niveau].emoji}</span>
           <div class="act-txt">${esc(a.texte)}
-            <span class="act-comp${a.competence ? '' : ' manque'}">${a.competence ? esc(competenceLib(a.competence) || a.competence) : 'Compétence à préciser'}</span></div>
+            ${essai(a.jour) ? '<span class="statut vide" style="margin-left:.25rem">Essai</span>' : ''}<span class="act-comp${a.competence ? '' : ' manque'}">${a.competence ? esc(competenceLib(a.competence) || a.competence) : 'Compétence à préciser'}</span></div>
           ${a.attente ? '<span class="btn-icone" title="En attente de réseau">⏳</span>' : `<button class="btn-icone" type="button" data-modifier="${a.id}" aria-label="Modifier">✏️</button>`}</div>`).join('')}
         <button class="btn ${liste.length ? 'secondaire' : ''} plein" type="button" data-ajouter="${m}" style="margin-top:.5rem">➕ Ajouter une activité</button>
-        ${liste.length ? '' : `<button class="btn-lien petit" type="button" data-absence="${m}" style="margin-top:.4rem">Je n’étais pas en entreprise</button>`}`;
+        ${liste.length || essai(jour) ? '' : `<button class="btn-lien petit" type="button" data-absence="${m}" style="margin-top:.4rem">Je n’étais pas en entreprise</button>`}`;
     }
     const st = abs ? '<span class="statut brouillon">Noté</span>' : liste.length ? '<span class="statut valide">Rempli ✓</span>' : '<span class="statut vide">À remplir</span>';
     return `<section class="carte demi-journee"><h2>${m === 'matin' ? '☀️' : '🌤'} ${MOMENTS[m]} ${st}</h2>${corps}</section>`;
@@ -316,7 +346,7 @@ export function commentaireHtml(c) {
 }
 
 
-// ---------------------------------------------------------------- Mes blocs
+// ---------------------------------------------------------------- Mes compétences (écran des blocs)
 
 const COURTS = { B1: 'Vendre', B2: 'Suivre', B3: 'Fidéliser', B4: 'Prospecter' };
 const ASTUCES = {
@@ -350,7 +380,7 @@ export async function blocs(vue) {
   const comp = d.journal.competences;
   const vides = etat.config.blocs.filter((b) => !resumeBloc(b, comp).activites);
   vue.innerHTML = `
-    <h1>🎯 Mes blocs</h1>
+    <h1>🎯 Mes compétences</h1>
     <p class="discret">Ce que ton journal montre de ta PFMP, bloc par bloc. Objectif : au moins une activité dans chaque bloc, pour écrire une fiche mission par bloc.</p>
     ${vides.length ? `<div class="bandeau chaud"><p>Il te manque encore : <b>${vides.map((b) => esc(COURTS[b.code])).join(', ')}</b>. Regarde les idées ci-dessous et parles-en à ton tuteur.</p></div>`
     : (d.journal.nbActivites ? '<div class="bandeau ok"><p>Bravo : tes quatre blocs ont au moins une activité ✓</p></div>' : '')}

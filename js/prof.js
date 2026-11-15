@@ -10,6 +10,9 @@ import { arbreHtml } from './orga.js';
 import { afficherDossierComplet } from './complet.js';
 import { imagesProfHtml, hydraterImages } from './images.js';
 import { commentaireHtml } from './eleve.js';
+import { fabriquerPdf, nomFichier, telecharger } from './pdf.js';
+
+const routeurRecharger = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
 
 const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille', 'interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4', 'checklist', 'bilan', 'projet', 'autoeval', 'oral'];
 const COURT = { identite: 'Fiche', organigramme: 'Orga', introduction: 'Intro', veille: 'Veille', interview: 'Interview', mission_b1: 'B1', mission_b2: 'B2', mission_b3: 'B3', mission_b4: 'B4', checklist: 'Check', bilan: 'Bilan', projet: 'Projet', autoeval: 'Auto', oral: 'Oral' };
@@ -32,6 +35,55 @@ function meilleurNiveau(c) {
   return null;
 }
 
+// ---------------------------------------------------------------- Actions sur un compte (fiche élève et écran Comptes)
+
+function nouveauCode(e, bouton) {
+  if (!confirm(`Créer un nouveau code pour ${e.prenom} ${e.nom} ? L’ancien ne marchera plus (son travail est conservé).`)) return;
+  action(bouton, async () => {
+    const r = await post(`/prof/eleves/${e.id}/nouveau-code`);
+    const m = modale('Nouveau code', `<p>${esc(r.prenom)} ${esc(r.nom)}<br>Identifiant : <code>${esc(r.identifiant)}</code></p>
+      <span class="code-affiche">${esc(r.code)}</span><p class="discret petit">Note-le maintenant : il ne sera plus affiché.</p>
+      <button class="btn secondaire plein" type="button" data-imprimer>🖨 Imprimer</button>`);
+    m.el.querySelector('[data-imprimer]').addEventListener('click', () => imprimer(fichesCodes([r])));
+  });
+}
+
+function supprimerEleve(e, bouton, apres) {
+  const saisie = prompt(`Suppression définitive de ${e.prenom} ${e.nom} et de tout son travail (journal, dossier, photos).\nPour confirmer, tape son identifiant : ${e.identifiant}`);
+  if (saisie === null) return;
+  if (saisie.trim() !== e.identifiant) { toast('Identifiant incorrect : rien n’a été supprimé.', 'erreur'); return; }
+  action(bouton, async () => {
+    await del(`/prof/eleves/${e.id}`, { confirmation: e.identifiant });
+    toast('Élève supprimé.', 'ok');
+    apres();
+  });
+}
+
+// Prénom, nom et dates de stage.
+function modifierEleve(e, apres) {
+  const p = etat.config.pfmp;
+  const fen = modale(`Modifier ${e.prenom} ${e.nom}`, `<form>
+    <label class="champ"><span class="lib">Prénom</span><input name="prenom" maxlength="60" required value="${esc(e.prenom)}"></label>
+    <label class="champ"><span class="lib">Nom</span><input name="nom" maxlength="80" required value="${esc(e.nom)}"></label>
+    <fieldset><legend>Dates de son stage</legend>
+      <p class="aide" style="margin-top:0">Laissez les dates officielles (${esc(dateCourte(p.debut))} → ${esc(dateCourte(p.fin))}) sauf pour un élève qui commence en retard ou finit plus tôt.</p>
+      <div class="rangee"><label class="champ" style="flex:1"><span class="lib">Du</span><input type="date" name="debut" min="${p.debut}" max="${p.finPossible}" value="${esc((e.stage && e.stage.debut) || e.stage_debut || p.debut)}"></label>
+      <label class="champ" style="flex:1"><span class="lib">Au</span><input type="date" name="fin" min="${p.debut}" max="${p.finPossible}" value="${esc((e.stage && e.stage.fin) || e.stage_fin || p.fin)}"></label></div>
+    </fieldset>
+    <p class="discret petit">L’identifiant (${esc(e.identifiant)}) ne change pas.</p>
+    <button class="btn plein" type="submit">Enregistrer</button></form>`);
+  const f = fen.el.querySelector('form');
+  f.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    action(f.querySelector('[type=submit]'), async () => {
+      const r = await patch(`/prof/eleves/${e.id}`, { prenom: f.prenom.value, nom: f.nom.value, stage_debut: f.debut.value || null, stage_fin: f.fin.value || null });
+      fen.fermer();
+      toast('Modifications enregistrées ✓', 'ok');
+      apres(r);
+    });
+  });
+}
+
 // ---------------------------------------------------------------- Classe
 
 export async function classe(vue) {
@@ -39,6 +91,7 @@ export async function classe(vue) {
   const moi = etat.utilisateur.id;
   const actifs = d.eleves.filter((e) => e.actif);
   const mesEleves = actifs.filter((e) => e.referent_id === moi);
+  const referents = actifs.some((e) => e.referent_id);
   let filtre = mesEleves.length ? 'mes' : 'tous';
   const profs = new Map(d.profs.map((p) => [p.id, p]));
 
@@ -59,7 +112,7 @@ export async function classe(vue) {
         <div class="chiffre"><b>${jamais}</b><span>jamais connecté${jamais > 1 ? 's' : ''}</span></div>
       </div>
       <div class="filtres">
-        ${[['mes', `Mes élèves (${mesEleves.length})`], ['tous', `Toute la classe (${actifs.length})`], ['alertes', `Alertes (${avecAlerte.length})`], ['lire', `À lire (${aLire.length})`], ['inactifs', 'Désactivés']]
+        ${[...(referents ? [['mes', `Mes élèves (${mesEleves.length})`]] : []), ['tous', `Toute la classe (${actifs.length})`], ['alertes', `Alertes (${avecAlerte.length})`], ['lire', `À lire (${aLire.length})`], ['inactifs', 'Désactivés']]
     .map(([k, l]) => `<button type="button" data-filtre="${k}" class="${filtre === k ? 'actif' : ''}">${l}</button>`).join('')}
       </div>
       ${!d.eleves.length ? '<div class="carte"><p>Aucun élève pour l’instant.</p><a class="btn" href="#/comptes">Créer les comptes élèves</a></div>' : ''}
@@ -195,7 +248,9 @@ export async function fiche(vue, id, onglet = 'suivi') {
     return `<div class="carte">
         <p>Identifiant : <code>${esc(e.identifiant)}</code></p>
         <p class="discret petit">Compte créé le ${esc(dateCourte(e.cree_le.slice(0, 10)))} · dernière connexion : ${esc(ilYA(e.derniere_connexion))}</p>
+        <p class="petit">Stage : du <b>${esc(dateCourte(e.stage.debut))}</b> au <b>${esc(dateCourte(e.stage.fin))}</b>${e.stage.personnalisee ? ' (dates propres à cet élève)' : ''}</p>
         <div class="pile">
+          <button class="btn secondaire" type="button" data-compte="modifier">✏️ Modifier le prénom, le nom ou les dates de stage</button>
           <button class="btn secondaire" type="button" data-compte="code">🔑 Donner un nouveau code</button>
           <button class="btn neutre" type="button" data-compte="actif">${e.actif ? '⏸ Désactiver le compte' : '▶️ Réactiver le compte'}</button>
           <button class="btn danger" type="button" data-compte="supprimer">🗑 Supprimer l’élève et toutes ses données</button>
@@ -242,31 +297,15 @@ export async function fiche(vue, id, onglet = 'suivi') {
     const b = ev.target.closest('[data-compte]');
     if (!b) return;
     const quoi = b.dataset.compte;
-    if (quoi === 'code') {
-      if (!confirm(`Créer un nouveau code pour ${e.prenom} ? L’ancien ne marchera plus.`)) return;
-      action(b, async () => {
-        const r = await post(`/prof/eleves/${e.id}/nouveau-code`);
-        const m = modale('Nouveau code', `<p>${esc(r.prenom)} ${esc(r.nom)}<br>Identifiant : <code>${esc(r.identifiant)}</code></p>
-          <span class="code-affiche">${esc(r.code)}</span><p class="discret petit">Note-le maintenant : il ne sera plus affiché.</p>
-          <button class="btn secondaire plein" type="button" data-imprimer>🖨 Imprimer</button>`);
-        m.el.querySelector('[data-imprimer]').addEventListener('click', () => imprimer(fichesCodes([r])));
-      });
-    } else if (quoi === 'actif') {
+    if (quoi === 'code') nouveauCode(e, b);
+    else if (quoi === 'modifier') modifierEleve(e, () => routeurRecharger());
+    else if (quoi === 'actif') {
       action(b, async () => {
         const r = await patch(`/prof/eleves/${e.id}`, { actif: !e.actif });
         Object.assign(e, r);
         dessiner();
       });
-    } else if (quoi === 'supprimer') {
-      const saisie = prompt(`Suppression définitive de ${e.prenom} ${e.nom} et de tout son travail.\nPour confirmer, tape son identifiant : ${e.identifiant}`);
-      if (saisie === null) return;
-      if (saisie.trim() !== e.identifiant) { toast('Identifiant incorrect : rien n’a été supprimé.', 'erreur'); return; }
-      action(b, async () => {
-        await del(`/prof/eleves/${e.id}`, { confirmation: e.identifiant });
-        toast('Élève supprimé.', 'ok');
-        location.hash = '#/';
-      });
-    }
+    } else if (quoi === 'supprimer') supprimerEleve(e, b, () => { location.hash = '#/'; });
   });
 
   dessiner();
@@ -314,19 +353,35 @@ export async function comptes(vue) {
       <p class="discret">Une ligne par élève : <b>Prénom;Nom</b> (ou deux colonnes copiées d’un tableur). Les comptes déjà existants sont ignorés.</p>
       <form data-import>
         <label class="champ"><span class="lib">Liste</span><textarea name="texte" rows="8" placeholder="Léa;Martin&#10;Yanis;Ben Ali"></textarea></label>
-        <label class="champ"><span class="lib">Référent de ces élèves</span><select name="referent">${optionsRef(etat.utilisateur.id)}</select>
-          <span class="aide">Astuce : collez d’abord votre moitié de classe avec vous comme référent, puis l’autre moitié avec votre collègue.</span></label>
+        <label class="champ"><span class="lib">Référent de ces élèves (facultatif)</span><select name="referent">${optionsRef(null)}</select>
+          <span class="aide">Seulement si vous vous répartissez le suivi : le tableau de bord proposera alors le filtre « Mes élèves ». Modifiable ensuite, ligne par ligne.</span></label>
         <button class="btn" type="submit">Créer les comptes</button>
       </form>
       <div data-resultat></div>
     </div>
-    <div class="carte"><h2>Comptes existants (${d.eleves.length})</h2>
-      ${d.eleves.length ? `<div style="overflow-x:auto"><table class="liste"><thead><tr><th>Élève</th><th>Identifiant</th><th>Référent</th><th>Dernière connexion</th></tr></thead>
+    <div class="carte"><div class="rangee entre"><h2 style="margin:0">Comptes existants (${d.eleves.length})</h2>
+      ${d.eleves.length ? '<button class="btn secondaire petit" type="button" data-tous-pdf>📥 Télécharger tous les dossiers en PDF</button>' : ''}</div>
+      <div data-progression-pdf></div>
+      ${d.eleves.length ? `<div style="overflow-x:auto;margin-top:.75rem"><table class="liste"><thead><tr><th>Élève</th><th>Identifiant</th><th>Référent</th><th>Dernière connexion</th><th>Actions</th></tr></thead>
       <tbody>${d.eleves.map((e) => `<tr><td><a href="#/eleve/${e.id}/compte">${esc(e.nom.toUpperCase())} ${esc(e.prenom)}</a>${e.actif ? '' : ' <span class="statut revoir">désactivé</span>'}</td>
-        <td><code>${esc(e.identifiant)}</code></td><td><select data-referent="${e.id}" aria-label="Référent de ${esc(e.prenom)}" style="min-height:36px;padding:.3rem .5rem">${optionsRef(e.referent_id)}</select></td><td>${esc(ilYA(e.derniere_connexion))}</td></tr>`).join('')}</tbody></table></div>
-        <p class="discret petit">Pour un code perdu : ouvre la fiche de l’élève, onglet Compte, « Donner un nouveau code ».</p>` : '<p class="discret">Aucun compte.</p>'}
+        <td><code>${esc(e.identifiant)}</code></td><td><select data-referent="${e.id}" aria-label="Référent de ${esc(e.prenom)}" style="min-height:36px;padding:.3rem .5rem">${optionsRef(e.referent_id)}</select></td><td>${esc(ilYA(e.derniere_connexion))}</td>
+        <td class="actions-compte"><button class="btn-icone" type="button" data-ligne="modifier" data-id="${e.id}" title="Modifier le prénom, le nom ou les dates de stage" aria-label="Modifier ${esc(e.prenom)}">✏️</button><button class="btn-icone" type="button" data-ligne="code" data-id="${e.id}" title="Donner un nouveau code" aria-label="Nouveau code pour ${esc(e.prenom)}">🔑</button><button class="btn-icone" type="button" data-ligne="supprimer" data-id="${e.id}" title="Supprimer l’élève et toutes ses données" aria-label="Supprimer ${esc(e.prenom)}">🗑</button></td></tr>`).join('')}</tbody></table></div>
+        <p class="discret petit">✏️ Modifier (prénom, nom, dates de stage) · 🔑 Nouveau code (code perdu) · 🗑 Supprimer</p>` : '<p class="discret">Aucun compte.</p>'}
     </div>
     <p class="petit" style="margin-top:1.5rem"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles (texte affiché aux élèves)</button></p>`;
+
+  vue.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-ligne]');
+    if (!b) return;
+    const e = d.eleves.find((x) => x.id === Number(b.dataset.id));
+    if (!e) return;
+    if (b.dataset.ligne === 'code') nouveauCode(e, b);
+    else if (b.dataset.ligne === 'modifier') modifierEleve(e, routeurRecharger);
+    else if (b.dataset.ligne === 'supprimer') supprimerEleve(e, b, routeurRecharger);
+  });
+
+  const bTous = $('[data-tous-pdf]', vue);
+  if (bTous) bTous.addEventListener('click', () => toutTelecharger(d.eleves, bTous, $('[data-progression-pdf]', vue)));
 
   vue.addEventListener('change', (ev) => {
     const sel = ev.target.closest('[data-referent]');
@@ -355,4 +410,44 @@ export async function comptes(vue) {
       if (r.crees.length) toast('Comptes créés ✓', 'ok');
     });
   });
+}
+
+// Tous les dossiers de la classe en PDF, réunis dans un fichier .zip.
+let jszip = null;
+const chargerZip = () => {
+  if (!jszip) {
+    jszip = new Promise((ok, ko) => {
+      const sc = document.createElement('script'); sc.src = 'lib/jszip.min.js';
+      sc.onload = () => ok(window.JSZip); sc.onerror = () => { jszip = null; ko(new Error('Impossible de charger l’outil de compression.')); };
+      document.head.appendChild(sc);
+    });
+  }
+  return jszip;
+};
+
+async function toutTelecharger(eleves, bouton, zoneProgression) {
+  if (!confirm(`Fabriquer les ${eleves.length} dossiers PDF ? Comptez quelques secondes par élève : gardez la page ouverte.`)) return;
+  bouton.disabled = true;
+  const JSZip = await chargerZip().catch((e) => { toast(e.message, 'erreur'); return null; });
+  if (!JSZip) { bouton.disabled = false; return; }
+  const zip = new JSZip();
+  const ratees = [];
+  try {
+    for (let i = 0; i < eleves.length; i += 1) {
+      const e = eleves[i];
+      zoneProgression.innerHTML = `<p class="petit">Dossier ${i + 1} sur ${eleves.length} : ${esc(e.prenom)} ${esc(e.nom)}…</p><progress max="${eleves.length}" value="${i}" style="width:100%"></progress>`;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const d = await get(`/prof/eleves/${e.id}`);
+        // eslint-disable-next-line no-await-in-loop
+        const blob = await fabriquerPdf(d, { prefixe: '/prof' });
+        zip.file(nomFichier(d.eleve), blob);
+      } catch { ratees.push(`${e.prenom} ${e.nom}`); }
+    }
+    zoneProgression.innerHTML = '<p class="petit">Création du fichier .zip…</p>';
+    const fichier = await zip.generateAsync({ type: 'blob' });
+    telecharger(fichier, `PFMP_${etat.config.pfmp.classe}_dossiers_${new Date().toISOString().slice(0, 10)}.zip`);
+    zoneProgression.innerHTML = ratees.length ? `<p class="petit" style="color:var(--rouge)">Dossiers non créés : ${ratees.map(esc).join(', ')}.</p>` : '';
+    toast(`${eleves.length - ratees.length} dossiers téléchargés ✓`, 'ok', 5000);
+  } finally { bouton.disabled = false; }
 }
