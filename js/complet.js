@@ -1,5 +1,7 @@
 // Page « Dossier complet » : tout le dossier d'un élève sur une seule page, à lire ou à imprimer (PDF pour Pearltrees).
-import { esc, pastilleStatut, imprimer, NIVEAUX } from './ui.js';
+import { esc, pastilleStatut, toast, NIVEAUX } from './ui.js';
+import { fabriquerPdf, telecharger, nomFichier } from './pdf.js';
+import { hydraterImages } from './images.js';
 import { etat } from './app.js';
 import { arbreHtml } from './orga.js';
 import {
@@ -30,6 +32,8 @@ function competencesHtml(activites) {
 }
 
 export function dossierCompletHtml(d, { pourProf = false } = {}) {
+  const prefixe = pourProf ? '/prof' : '/eleve';
+  const vignettes = (cle) => { const ims = (d.images || []).filter((x) => x.cle === cle); return ims.length ? `<div class="vignettes" style="margin-top:.75rem">${ims.map((im) => `<figure class="vignette"><img data-image="${prefixe}/images/${im.id}/fichier" alt=""><figcaption>${esc(im.legende)}</figcaption></figure>`).join('')}</div>` : ''; };
   const S = d.sections;
   const nom = `${d.eleve.prenom} ${d.eleve.nom.toUpperCase()}`;
   const p = etat.config.pfmp;
@@ -41,7 +45,7 @@ export function dossierCompletHtml(d, { pourProf = false } = {}) {
     const titre = etat.config.sections[cle].titre;
     const statut = pourProf ? ` ${pastilleStatut(commence(s) ? s.statut : 'vide')}` : '';
     const manques = pourProf && commence(s) && s.manques && s.manques.length ? `<p class="dc-manques">Il manque : ${s.manques.map(esc).join(' ; ')}.</p>` : '';
-    return `<section class="dc-rubrique"><h3>${esc(titre)}${statut}</h3>${manques}${commence(s) ? corps(s.contenu) : '<p class="discret">Partie pas encore commencée.</p>'}</section>`;
+    return `<section class="dc-rubrique"><h3>${esc(titre)}${statut}</h3>${manques}${commence(s) ? corps(s.contenu) + vignettes(cle) : '<p class="discret">Partie pas encore commencée.</p>'}</section>`;
   };
 
   const missions = etat.config.blocs.map((b) => rubrique(`mission_${b.code.toLowerCase()}`, (c) => lectureMission(c, b, acts))).join('');
@@ -73,18 +77,34 @@ export function dossierCompletHtml(d, { pourProf = false } = {}) {
   </div>`;
 }
 
-// Écran commun élève / enseignant : bouton d'impression + dossier.
+// Écran commun élève / enseignant : bouton de téléchargement du PDF + aperçu du dossier.
 export function afficherDossierComplet(zone, d, { pourProf = false } = {}) {
+  const prefixe = pourProf ? '/prof' : '/eleve';
   zone.innerHTML = `
     <div class="bandeau info dc-ecran-seul"><p>${pourProf
-    ? 'Toutes les rubriques de l’élève sur une page, pour la lecture finale.'
-    : '📄 Tout ton dossier sur une seule page. Pour Pearltrees : clique sur « Imprimer ou enregistrer en PDF », choisis <b>Enregistrer au format PDF</b>, puis dépose le fichier dans ton Pearltrees.'}</p>
-      <button class="btn plein" type="button" data-imprimer-dossier style="margin-top:.75rem">🖨 Imprimer ou enregistrer en PDF</button></div>
+    ? 'Toutes les rubriques de l’élève sur une page, pour la lecture finale. Le PDF est celui que l’élève dépose sur Pearltrees.'
+    : '📄 Tout ton dossier en un seul fichier PDF, mis en page, prêt à déposer sur <b>Pearltrees</b>.'}</p>
+      <button class="btn plein" type="button" data-pdf style="margin-top:.75rem">📥 Télécharger ${pourProf ? 'le' : 'mon'} dossier en PDF</button>
+      <p class="petit discret" style="margin:.5rem 0 0">Fichier : ${esc(nomFichier(d.eleve))}</p></div>
     ${dossierCompletHtml(d, { pourProf })}`;
-  zone.querySelector('[data-imprimer-dossier]').addEventListener('click', () => {
-    const titreAvant = document.title;
-    document.title = `PFMP - ${d.eleve.prenom} ${d.eleve.nom}`;
-    imprimer(dossierCompletHtml(d));
-    setTimeout(() => { document.title = titreAvant; }, 2000);
+  hydraterImages(zone);
+  const b = zone.querySelector('[data-pdf]');
+  b.addEventListener('click', async () => {
+    if (!pourProf) {
+      const manquent = Object.keys(etat.config.sections)
+        .filter((cle) => cle !== 'checklist' && d.sections[cle] && (d.sections[cle].manques || []).length)
+        .map((cle) => etat.config.sections[cle].titre);
+      if (manquent.length && !confirm(`Attention, ces parties ne sont pas complètes :\n\n• ${manquent.join('\n• ')}\n\nTélécharger quand même ?`)) return;
+    }
+    b.disabled = true;
+    const avant = b.textContent;
+    b.textContent = 'Fabrication du PDF… (quelques secondes)';
+    try {
+      const blob = await fabriquerPdf(d, { prefixe });
+      telecharger(blob, nomFichier(d.eleve));
+      toast('PDF prêt ✓ Regarde dans tes téléchargements.', 'ok', 5000);
+    } catch (e) {
+      toast(e.message || 'Le PDF n’a pas pu être fabriqué.', 'erreur', 6000);
+    } finally { b.disabled = false; b.textContent = avant; }
   });
 }

@@ -23,6 +23,10 @@ export const FICHE_IDENTITE = [
     { cle: 'activite', lib: 'Activité', requis: true, type: 'zone', lignes: 2, max: 300, aide: 'Ce que fait l’entreprise, en une ou deux phrases.' },
     { cle: 'produits', lib: 'Produits ou services proposés', type: 'zone', lignes: 2, max: 400 },
   ] },
+  { groupe: 'Mon tuteur', champs: [
+    { cle: 'tuteur_nom', lib: 'Prénom et nom de mon tuteur', requis: true, max: 120 },
+    { cle: 'tuteur_fonction', lib: 'Sa fonction', max: 120, aide: 'Ex. négociatrice immobilière, responsable commercial…' },
+  ] },
   { groupe: 'Organisation', champs: [
     { cle: 'type_organisation', lib: 'Type d’organisation', requis: true, type: 'select', options: TYPES_ORGA },
     { cle: 'effectif', lib: 'Effectif (nombre de salariés)', max: 60 },
@@ -42,16 +46,16 @@ export const FICHE_IDENTITE = [
   ] },
 ];
 
-export const QUESTIONS_INTRO = [
-  'Comment as-tu trouvé ton stage ? (candidatures, relations, aide du lycée… Dire que ça a été difficile est une vraie réponse.)',
-  'Que fait l’entreprise, en une phrase ?',
-  'Ta première impression, le premier jour : l’accueil, l’ambiance, ce qui t’a surpris.',
-  'Qu’aimerais-tu apprendre pendant ces quatre semaines ? Ou qu’est-ce qui t’inquiète ?',
+// Aide affichée sous chaque question (les intitulés courts viennent du serveur).
+export const AIDES_INTRO = [
+  'Candidatures, relations, aide du lycée… Dire que ça a été difficile est une vraie réponse.',
+  'En une ou deux phrases : son activité, ses clients.',
+  'L’accueil, l’ambiance, ce qui t’a surpris.',
+  'Pendant ces quatre semaines.',
 ];
-
 export const AMORCES_INTRO = [
-  'J’effectue ma PFMP chez …, une entreprise qui …',
   'J’ai trouvé ce stage grâce à …',
+  'Mon entreprise, …, est spécialisée dans …',
   'Le premier jour, j’ai remarqué que …',
   'Pendant ces quatre semaines, j’aimerais apprendre à …',
 ];
@@ -103,33 +107,37 @@ export function lectureIdentite(c) {
 }
 
 export function editeurIntroduction(zone, contenu, { lectureSeule, changer }) {
+  const dis = lectureSeule ? ' disabled' : '';
+  const Q = etat.config.questionsIntro;
+  const rep = contenu.reponses || [];
   zone.innerHTML = `
-    <div class="carte"><h2>Questions pour t’aider</h2>
-      <ul class="questions-guides">${QUESTIONS_INTRO.map((q) => `<li>${esc(q)}</li>`).join('')}</ul>
-      <p class="discret petit" style="margin:.75rem 0 .25rem"><b>Tu bloques ?</b> Pars de ces débuts de phrases et complète-les :</p>
-      <ul class="questions-guides">${AMORCES_INTRO.map((q) => `<li><i>${esc(q)}</i></li>`).join('')}</ul>
-      <p class="discret petit" style="margin-top:.5rem">Écris un vrai texte de 5 lignes au moins (10 au plus).</p></div>
-    <label class="champ"><span class="lib">Mon introduction</span>
-      <textarea name="texte" rows="10" maxlength="3000"${lectureSeule ? ' disabled' : ''} placeholder="J’effectue ma PFMP chez…">${esc(contenu.texte || '')}</textarea>
-      <span class="aide" data-compteur></span></label>`;
-  const ta = zone.querySelector('textarea');
-  const compteur = zone.querySelector('[data-compteur]');
-  const majCompteur = () => {
-    const n = nbMots(ta.value);
-    const lignes = Math.round(n / 12);
-    compteur.textContent = `${n} mots, environ ${lignes} ligne${lignes > 1 ? 's' : ''} sur une copie. ${n < 40 ? 'Objectif : au moins 40 mots.' : n > 160 ? 'C’est déjà long : 10 lignes maximum.' : 'Bonne longueur ✓'}`;
+    <div class="bandeau info"><p>✍️ Réponds à chaque question en 1 à 3 phrases. Dans ton dossier, tes quatre réponses formeront ton introduction : écris de vraies phrases qui s’enchaînent.</p></div>
+    ${contenu.texte ? `<div class="carte"><p class="petit"><b>Ton ancien texte</b> (à reprendre dans les cases ci-dessous) :</p><div class="texte-lecture petit">${esc(contenu.texte)}</div></div>` : ''}
+    <form class="carte" novalidate>${Q.map((q, i) => `<label class="champ"><span class="lib">${i + 1}. ${esc(q)} <span class="requis">*</span></span>
+      <textarea name="r${i}" rows="3" maxlength="800"${dis} placeholder="${esc(AMORCES_INTRO[i])}">${esc(rep[i] || '')}</textarea>
+      <span class="aide">${esc(AIDES_INTRO[i])} <span data-compte="${i}"></span></span></label>`).join('')}
+      <p class="aide" data-total></p></form>`;
+  const form = zone.querySelector('form');
+  form.addEventListener('submit', (e) => e.preventDefault());
+  const lire = () => ({ reponses: Q.map((_, i) => form.elements[`r${i}`].value) });
+  const compter = () => {
+    const r = lire().reponses;
+    r.forEach((x, i) => { const n = nbMots(x); zone.querySelector(`[data-compte="${i}"]`).textContent = n ? (n < 6 ? '· un peu court' : '· ✓') : ''; });
+    const t = nbMots(r.join(' '));
+    zone.querySelector('[data-total]').textContent = `${t} mots en tout${t < 40 ? ' (objectif : 40 mots au moins, environ 5 lignes)' : t > 160 ? ' : c’est déjà long, 10 lignes maximum.' : ' ✓'}`;
   };
-  ta.addEventListener('input', () => { majCompteur(); changer({ texte: ta.value }); });
-  majCompteur();
-  return { definirLectureSeule(v) { ta.disabled = v; } };
+  form.addEventListener('input', () => { compter(); changer(lire()); });
+  compter();
+  return { definirLectureSeule(v) { form.querySelectorAll('textarea').forEach((x) => { x.disabled = v; }); } };
 }
 
-export const lectureIntroduction = (c) => (c.texte ? `<div class="texte-lecture">${esc(c.texte)}</div><p class="discret petit">${nbMots(c.texte)} mots</p>` : '<p class="discret">Pas encore rédigée.</p>');
+export const texteIntroduction = (c) => (c.texte ? c.texte : (c.reponses || []).map((x) => x.trim()).filter(Boolean).map((x) => (/[.!?…]$/.test(x) ? x : `${x}.`)).join(' '));
+export const lectureIntroduction = (c) => { const t = texteIntroduction(c); return t ? `<div class="texte-lecture">${esc(t)}</div><p class="discret petit">${nbMots(t)} mots</p>` : '<p class="discret">Pas encore rédigée.</p>'; };
 
 // ---------------------------------------------------------------- Veille concurrentielle et commerciale
 
 
-const CHAMPS_CONCURRENT = [
+export const CHAMPS_CONCURRENT = [
   { cle: 'nom', lib: 'Nom', max: 120, requis: true },
   { cle: 'lieu', lib: 'Où ? (ville, quartier, en ligne…)', max: 120 },
   { cle: 'offre', lib: 'Ce qu’il propose', max: 300, requis: true, zone: true },
@@ -199,7 +207,7 @@ export function lectureVeille(c) {
 
 // ---------------------------------------------------------------- Fiches mission
 
-const TRAME_MISSION = [
+export const TRAME_MISSION = [
   { cle: 'contexte', lib: 'La mission', aide: 'Quelle était la mission ? Dans quelle situation (client, produit, moment) ?', lignes: 3, max: 1200, requis: true },
   { cle: 'objectifs', lib: 'Les objectifs', aide: 'À quoi servait cette mission pour l’entreprise ?', lignes: 2, max: 800, requis: true },
   { cle: 'moyens_materiels', lib: 'Les moyens matériels', aide: 'Outils, logiciels, documents, téléphone, véhicule…', lignes: 2, max: 600 },
@@ -292,7 +300,7 @@ export function lectureMission(c, bloc, journal = []) {
 
 // ---------------------------------------------------------------- Interview
 
-const MODES = { face: 'En face à face', telephone: 'Par téléphone', visio: 'En visio' };
+export const MODES = { face: 'En face à face', telephone: 'Par téléphone', visio: 'En visio' };
 
 export function editeurInterview(zone, contenu, { lectureSeule, changer }) {
   const dis = lectureSeule ? ' disabled' : '';
@@ -300,8 +308,16 @@ export function editeurInterview(zone, contenu, { lectureSeule, changer }) {
   const questions = etat.config.questionsInterview;
   const rep = contenu.reponses || [];
   zone.innerHTML = `
-    <div class="bandeau info"><p>🎤 Choisis un professionnel de l’entreprise (commercial, conseiller, responsable…) et demande-lui un rendez-vous de 20 minutes. Prends des notes pendant l’échange, puis rédige ses réponses ici.</p>
-      <p class="petit">🔒 Demande-lui son accord. Pas de nom de famille ; pour la rémunération, une fourchette ou « fixe + primes » suffit.</p></div>
+    <div class="carte guide-interview"><h2>🎤 Comment faire ton interview</h2>
+      <ol>
+        <li><b>Choisis un professionnel</b> de l’entreprise (commercial, conseiller, responsable…) et demande-lui un rendez-vous :
+          <span class="phrase-type">« Bonjour, dans le cadre de mon stage, je dois interviewer un professionnel sur son métier. Auriez-vous 20 minutes à m’accorder cette semaine ? »</span></li>
+        <li><b>Imprime la fiche d’interview</b> (ou garde-la sur ton téléphone) : les 10 questions avec de la place pour noter.</li>
+        <li><b>Pendant l’entretien</b>, prends des notes. Tu peux aussi l’enregistrer avec le dictaphone de ton téléphone, <b>si la personne est d’accord</b>, pour le réécouter ensuite.</li>
+        <li><b>Remercie-la</b>, puis rédige ses réponses ici avec des phrases complètes.</li>
+      </ol>
+      <p class="petit">🔒 Pas de nom de famille ; pour la rémunération, une fourchette ou « fixe + primes » suffit.</p>
+      <button class="btn secondaire petit" type="button" data-fiche-interview>🖨 Imprimer la fiche d’interview</button></div>
     <form class="carte" novalidate>
       <div class="groupe-titre" style="margin-top:0">La personne interrogée</div>
       <label class="champ"><span class="lib">Son poste${req}</span><input name="poste" maxlength="120" value="${esc(contenu.poste || '')}"${dis} placeholder="ex. Conseiller commercial"></label>
@@ -317,6 +333,7 @@ export function editeurInterview(zone, contenu, { lectureSeule, changer }) {
       <label class="champ"><span class="lib">Ce que cette interview m’a appris${req}</span>
         <textarea name="appris" rows="4" maxlength="1500"${dis} placeholder="Sur le métier, sur ce qu’il faut pour le faire, sur mon projet…">${esc(contenu.appris || '')}</textarea></label>
     </form>`;
+  zone.querySelector('[data-fiche-interview]').addEventListener('click', () => imprimer(ficheInterviewHtml()));
   const form = zone.querySelector('form');
   form.addEventListener('submit', (e) => e.preventDefault());
   const lire = () => ({
@@ -328,12 +345,23 @@ export function editeurInterview(zone, contenu, { lectureSeule, changer }) {
   return { definirLectureSeule(v) { form.querySelectorAll('input, textarea, select').forEach((x) => { x.disabled = v; }); } };
 }
 
+function ficheInterviewHtml() {
+  const u = etat.utilisateur;
+  return `<div class="fiche-interview">
+    <h1>Fiche d’interview — ${esc(u.prenom)} ${esc(u.nom)}</h1>
+    <p><b>Personne interrogée</b> (poste) : ........................................................ &nbsp; Prénom (si accord) : ..........................  &nbsp; Date : ............</p>
+    <div class="rappel">Avant de commencer : je me présente, j’explique que c’est pour mon dossier de PFMP et je demande son accord (et pour l’enregistrement, si je veux enregistrer).<br>
+    À la fin : je remercie la personne pour son temps.</div>
+    ${etat.config.questionsInterview.map((q, i) => `<div class="q-interview"><b>${i + 1}. ${esc(q)}</b><div class="lignes"></div></div>`).join('')}
+  </div>`;
+}
+
 export function lectureInterview(c) {
   const q = etat.config.questionsInterview;
   return `<dl class="fiche-lecture">
     <dt>Personne interrogée</dt><dd>${c.poste ? esc(c.poste) : '<span class="discret">—</span>'}${c.prenom ? ` (${esc(c.prenom)})` : ''}${c.date ? ` · ${esc(c.date)}` : ''}${c.mode ? ` · ${MODES[c.mode]}` : ''}</dd>
     ${q.map((x, i) => `<dt>${i + 1}. ${esc(x)}</dt><dd class="${(c.reponses || [])[i] ? '' : 'vide'}">${(c.reponses || [])[i] ? esc(c.reponses[i]) : 'pas de réponse'}</dd>`).join('')}
-    <dt>Ce que l’interview lui a appris</dt><dd class="${c.appris ? '' : 'vide'}">${c.appris ? esc(c.appris) : 'manquant'}</dd>
+    <dt>Ce que l’interview m’a appris</dt><dd class="${c.appris ? '' : 'vide'}">${c.appris ? esc(c.appris) : 'manquant'}</dd>
   </dl>`;
 }
 
@@ -376,7 +404,7 @@ export function lectureChecklist(c) {
 
 // ---------------------------------------------------------------- Mon bilan
 
-const CHAMPS_BILAN = [
+export const CHAMPS_BILAN = [
   { cle: 'positif', lib: 'Ce que je retiens de positif', aide: 'Sur le plan professionnel et personnel : ce que tu as aimé, réussi, appris. Donne des exemples.', requis: true },
   { cle: 'difficile', lib: 'Ce qui a été difficile', aide: 'Ce qui t’a moins plu ou mis en difficulté, et comment tu as réagi.', requis: true },
   { cle: 'integration', lib: 'Mon intégration dans l’équipe', aide: 'Comment tu as été accueilli, tes relations avec ton tuteur, les salariés, les clients.', requis: true },
@@ -419,7 +447,7 @@ export const lectureProjet = (c) => `<dl class="fiche-lecture">${etat.config.amo
 
 // ---------------------------------------------------------------- Auto-évaluation
 
-const NIV_AUTO = [['pas_encore', 'Pas encore'], ['en_progres', 'En progrès'], ['acquis', 'Acquis'], ['tres_bien', 'Très bien']];
+export const NIV_AUTO = [['pas_encore', 'Pas encore'], ['en_progres', 'En progrès'], ['acquis', 'Acquis'], ['tres_bien', 'Très bien']];
 
 export function editeurAutoeval(zone, contenu, { lectureSeule, changer }) {
   const dis = lectureSeule ? ' disabled' : '';

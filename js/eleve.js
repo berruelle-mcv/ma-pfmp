@@ -6,6 +6,8 @@ import {
   NIVEAUX, MOMENTS, MOTIFS, pastilleStatut,
 } from './ui.js';
 import { afficherDossierComplet } from './complet.js';
+import { enAttente, mettreEnAttente } from './attente.js';
+import { zoneImages } from './images.js';
 import { editeurIdentite, editeurIntroduction, editeurVeille, editeurMission, editeurInterview, editeurChecklist, editeurBilan, editeurProjet, editeurAutoeval, editeurOral, relectureHtml } from './rubriques.js';
 import { editeurOrganigramme } from './orga.js';
 
@@ -114,7 +116,8 @@ export async function accueil(vue) {
     ${ph !== 'avant' ? `<a class="carte lien" href="#/blocs"><h2 style="margin:0">🎯 Mes blocs</h2>
       <p class="discret petit" style="margin:.25rem 0 0">${NIVEAUX.observe.emoji} ${n.observe} · ${NIVEAUX.participe.emoji} ${n.participe} · ${NIVEAUX.realise.emoji} ${n.realise} — objectif : au moins une activité par bloc</p>
       ${blocsMiniHtml(d.journal.competences)}</a>` : ''}
-    ${ph === 'avant' ? '<div class="bandeau info"><p>Tu peux déjà commencer ta fiche d’identité si tu connais ton entreprise. Le journal s’ouvrira le premier jour de ta PFMP.</p></div>' : ''}`;
+    ${ph === 'avant' ? '<div class="bandeau info"><p>Tu peux déjà commencer ta fiche d’identité si tu connais ton entreprise. Le journal s’ouvrira le premier jour de ta PFMP.</p></div>' : ''}
+    <p class="petit" style="text-align:center;margin-top:1.5rem"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>`;
 
   vue.addEventListener('click', async (e) => {
     if (e.target.closest('[data-installer]') && etat.invitationInstall) {
@@ -140,8 +143,10 @@ function tacheHtml(cle, s) {
 
 export async function journal(vue, jourDemande) {
   const p = etat.config.pfmp;
-  const [d, com] = await Promise.all([get('/eleve/journal'), get('/eleve/journal/commentaires')]);
+  const [d, com] = await Promise.all([get('/eleve/journal'), get('/eleve/journal/commentaires').catch(() => ({ commentaires: [] }))]);
   let activites = d.activites;
+  let horsLigne = !!d.horsLigne;
+  const toutes = () => activites.concat(enAttente());
   let absences = d.absences;
   const auj = d.jour;
 
@@ -155,7 +160,7 @@ export async function journal(vue, jourDemande) {
 
   const couverture = (j, m) => {
     if (absences.some((a) => a.jour === j && a.moment === m)) return 'abs';
-    if (activites.some((a) => a.jour === j && a.moment === m)) return 'ok';
+    if (toutes().some((a) => a.jour === j && a.moment === m)) return 'ok';
     return (j < auj && jourSem(j) >= 1 && jourSem(j) <= 5) ? 'manque' : '';
   };
 
@@ -163,7 +168,9 @@ export async function journal(vue, jourDemande) {
     history.replaceState(null, '', `#/journal/${jour}`);
     const lundi = lundiDe(jour);
     const semaine = [0, 1, 2, 3, 4].map((i) => ajouterJours(lundi, i));
+    const nbAttente = enAttente().length;
     vue.innerHTML = `
+      ${horsLigne || nbAttente ? `<div class="bandeau info"><p>📶 ${horsLigne ? 'Pas de réseau pour l’instant : tu vois la dernière version de ton journal. ' : ''}${nbAttente ? `${nbAttente} activité${nbAttente > 1 ? 's' : ''} gardée${nbAttente > 1 ? 's' : ''} sur ton téléphone ⏳ : ${nbAttente > 1 ? 'elles seront envoyées' : 'elle sera envoyée'} automatiquement dès que le réseau reviendra.` : 'Tu peux quand même noter tes activités : elles seront envoyées automatiquement.'}</p></div>` : ''}
       ${com.commentaires.length ? `<details class="carte" open><summary><b>💬 Messages de tes professeurs sur ton journal (${com.commentaires.length})</b></summary>
         <div style="margin-top:.75rem">${com.commentaires.map(commentaireHtml).join('')}</div></details>` : ''}
       <div class="jour-nav">
@@ -180,7 +187,7 @@ export async function journal(vue, jourDemande) {
   }
 
   function demiJourneeHtml(m) {
-    const liste = activites.filter((a) => a.jour === jour && a.moment === m);
+    const liste = toutes().filter((a) => a.jour === jour && a.moment === m);
     const abs = absences.find((a) => a.jour === jour && a.moment === m);
     let corps;
     if (abs) {
@@ -190,7 +197,7 @@ export async function journal(vue, jourDemande) {
         <div class="activite"><span class="niv" title="${NIVEAUX[a.niveau].lib}">${NIVEAUX[a.niveau].emoji}</span>
           <div class="act-txt">${esc(a.texte)}
             <span class="act-comp${a.competence ? '' : ' manque'}">${a.competence ? esc(competenceLib(a.competence) || a.competence) : 'Compétence à préciser'}</span></div>
-          <button class="btn-icone" type="button" data-modifier="${a.id}" aria-label="Modifier">✏️</button></div>`).join('')}
+          ${a.attente ? '<span class="btn-icone" title="En attente de réseau">⏳</span>' : `<button class="btn-icone" type="button" data-modifier="${a.id}" aria-label="Modifier">✏️</button>`}</div>`).join('')}
         <button class="btn ${liste.length ? 'secondaire' : ''} plein" type="button" data-ajouter="${m}" style="margin-top:.5rem">➕ Ajouter une activité</button>
         ${liste.length ? '' : `<button class="btn-lien petit" type="button" data-absence="${m}" style="margin-top:.4rem">Je n’étais pas en entreprise</button>`}`;
     }
@@ -226,7 +233,16 @@ export async function journal(vue, jourDemande) {
           const r = await put(`/eleve/journal/${a.id}`, corps);
           activites = activites.map((x) => (x.id === a.id ? r : x));
         } else {
-          activites.push(await post('/eleve/journal', corps));
+          try {
+            activites.push(await post('/eleve/journal', corps));
+          } catch (e) {
+            if (!e.horsLigne) throw e;
+            mettreEnAttente(corps);
+            fen.fermer();
+            toast('Pas de réseau : ton activité est gardée sur ton téléphone. Elle sera envoyée automatiquement ⏳', 'ok', 6000);
+            dessiner();
+            return;
+          }
         }
         fen.fermer();
         toast('Activité enregistrée ✓', 'ok');
@@ -281,7 +297,13 @@ export async function journal(vue, jourDemande) {
     }
   });
 
+  // Quand les activités gardées sur le téléphone sont parties, on recharge le journal.
+  const recharger = async () => {
+    try { const n = await get('/eleve/journal'); activites = n.activites; absences = n.absences; horsLigne = !!n.horsLigne; dessiner(); } catch { /* plus tard */ }
+  };
+  window.addEventListener('attente-envoyee', recharger);
   dessiner();
+  return () => window.removeEventListener('attente-envoyee', recharger);
 }
 
 function legendeNiveaux() {
@@ -387,6 +409,7 @@ export async function rubrique(vue, cle) {
     <div data-messages></div>
     <div data-relecture></div>
     <div data-editeur></div>
+    <div data-images></div>
     <div class="barre-envoi">
       <ul class="manques" data-manques></ul>
       ${etat.config.iaActive && s.relisible !== false && etat.config.sections[cle].relisible !== false ? '<button class="btn secondaire plein btn-relire" type="button" data-relire></button>' : ''}
@@ -418,6 +441,8 @@ export async function rubrique(vue, cle) {
     lectureSeule: statut === 'valide',
     changer(c) { contenu = c; enAttente = true; elSauv.textContent = 'Modifications en cours…'; if (statut !== 'soumis' && statut !== 'valide') btnEnvoyer.disabled = false; sauverBientot(); },
   });
+
+  zoneImages($('[data-images]', vue), cle, { lectureSeule: statut === 'valide' }).catch(() => {});
 
   async function sauver() {
     if (!enAttente) return enCours;

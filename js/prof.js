@@ -8,6 +8,7 @@ import {
 import { lectureIdentite, lectureIntroduction, lectureVeille, lectureMission, lectureInterview, lectureChecklist, lectureBilan, lectureProjet, lectureAutoeval, lectureOral, relectureHtml } from './rubriques.js';
 import { arbreHtml } from './orga.js';
 import { afficherDossierComplet } from './complet.js';
+import { imagesProfHtml, hydraterImages } from './images.js';
 import { commentaireHtml } from './eleve.js';
 
 const RUBRIQUES = ['identite', 'organigramme', 'introduction', 'veille', 'interview', 'mission_b1', 'mission_b2', 'mission_b3', 'mission_b4', 'checklist', 'bilan', 'projet', 'autoeval', 'oral'];
@@ -111,7 +112,7 @@ export async function fiche(vue, id, onglet = 'suivi') {
     else if (onglet === 'journal') zone.innerHTML = journalHtml();
     else if (onglet === 'compte') zone.innerHTML = compteHtml();
     else if (onglet === 'complet') afficherDossierComplet(zone, d, { pourProf: true });
-    else zone.innerHTML = rubriqueHtml(onglet);
+    else { zone.innerHTML = rubriqueHtml(onglet); hydraterImages(zone); }
   }
 
   function suiviHtml() {
@@ -174,7 +175,7 @@ export async function fiche(vue, id, onglet = 'suivi') {
     return `
       <div class="rangee entre" style="margin-bottom:.75rem"><h2 style="margin:0">${esc(titre(cle))}</h2>${pastilleStatut(s.modifie_le ? s.statut : 'vide')}</div>
       ${s.modifie_le ? `<p class="discret petit">Dernière modification : ${esc(ilYA(s.modifie_le))}${s.manques.length ? ` · manque : ${esc(s.manques.join(', '))}` : ''}</p>` : '<div class="bandeau info"><p>L’élève n’a pas encore commencé cette rubrique.</p></div>'}
-      <div class="carte">${lecture}</div>
+      <div class="carte">${lecture}${imagesProfHtml(d.images || [], cle)}</div>
       ${relectureHtml(s.relecture, { pourProf: true })}
       <div class="carte"><h2>💬 Commentaires</h2>
         ${s.commentaires.map(commentaireHtml).join('') || '<p class="discret">Aucun commentaire.</p>'}
@@ -222,6 +223,17 @@ export async function fiche(vue, id, onglet = 'suivi') {
         d.sections[cle] = { ...d.sections[cle], ...r };
         toast(cible === 'valide' ? 'Rubrique validée ✓' : cible === 'a_revoir' ? 'Renvoyée à l’élève' : 'Rubrique rouverte', 'ok');
       }
+      dessiner();
+    });
+  });
+
+  vue.addEventListener('click', (ev) => {
+    const bi = ev.target.closest('[data-suppr-image]');
+    if (!bi || !confirm('Retirer cette image du dossier de l’élève ?')) return;
+    action(bi, async () => {
+      await del(`/prof/images/${bi.dataset.supprImage}`);
+      d.images = d.images.filter((x) => x.id !== Number(bi.dataset.supprImage));
+      toast('Image retirée.', 'ok');
       dessiner();
     });
   });
@@ -313,7 +325,8 @@ export async function comptes(vue) {
       <tbody>${d.eleves.map((e) => `<tr><td><a href="#/eleve/${e.id}/compte">${esc(e.nom.toUpperCase())} ${esc(e.prenom)}</a>${e.actif ? '' : ' <span class="statut revoir">désactivé</span>'}</td>
         <td><code>${esc(e.identifiant)}</code></td><td><select data-referent="${e.id}" aria-label="Référent de ${esc(e.prenom)}" style="min-height:36px;padding:.3rem .5rem">${optionsRef(e.referent_id)}</select></td><td>${esc(ilYA(e.derniere_connexion))}</td></tr>`).join('')}</tbody></table></div>
         <p class="discret petit">Pour un code perdu : ouvre la fiche de l’élève, onglet Compte, « Donner un nouveau code ».</p>` : '<p class="discret">Aucun compte.</p>'}
-    </div>`;
+    </div>
+    <p class="petit" style="margin-top:1.5rem"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles (texte affiché aux élèves)</button></p>`;
 
   vue.addEventListener('change', (ev) => {
     const sel = ev.target.closest('[data-referent]');

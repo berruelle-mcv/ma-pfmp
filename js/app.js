@@ -1,8 +1,9 @@
 // Démarrage de Ma PFMP : connexion, navigation entre les écrans.
 import { get, post, definirJeton, aUnJeton, quandSessionExpiree } from './api.js';
-import { $, $$, esc, toast, action } from './ui.js';
+import { $, $$, esc, toast, action, modale } from './ui.js';
 import * as eleve from './eleve.js';
 import * as prof from './prof.js';
+import { envoyerAttente } from './attente.js';
 
 export const etat = { utilisateur: null, config: null, invitationInstall: null };
 
@@ -87,6 +88,7 @@ function afficherConnexion() {
       <button class="btn plein" type="submit">Se connecter</button>
     </form>
     <p class="discret petit" style="text-align:center">Code perdu ? Demande-en un nouveau à ton professeur.</p>
+    <p class="petit" style="text-align:center"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>
   </div>`;
   $('#form-connexion').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -116,6 +118,19 @@ $('#btn-deconnexion').addEventListener('click', async () => {
   router();
 });
 
+// Page « Données personnelles », accessible depuis la connexion, l'accueil élève et l'écran Comptes.
+export function afficherDonnees() {
+  modale('🔒 Données personnelles', `<div class="texte-donnees">
+    <p><b>Qui utilise Ma PFMP ?</b> Ma PFMP est l’outil de suivi des périodes de formation en milieu professionnel du lycée professionnel Paul Belmondo (Arpajon), mis en place par M. &amp; Mme Berruelle pour leur classe.</p>
+    <p><b>Quelles données ?</b> Ton prénom, ton nom, ta classe et ton identifiant ; ce que tu écris dans ton journal et ton dossier ; les images que tu ajoutes ; la date de ta dernière connexion. Rien d’autre : pas d’adresse, pas de téléphone, pas de suivi publicitaire.</p>
+    <p><b>Pourquoi ?</b> Pour t’accompagner pendant ta PFMP, suivre ton travail et préparer ton évaluation.</p>
+    <p><b>Qui les voit ?</b> Toi et tes professeurs, M. &amp; Mme Berruelle. Personne d’autre, et rien n’est public. Les données sont stockées sur un serveur situé en France.</p>
+    <p><b>Relecture par l’IA.</b> Quand <i>tu</i> cliques sur « Faire relire mon travail », le texte de la rubrique (sans ton nom) est envoyé au service d’intelligence artificielle d’Anthropic pour obtenir des conseils. Ce texte n’est pas utilisé pour entraîner l’IA. C’est pour cela qu’il ne faut jamais écrire d’informations confidentielles.</p>
+    <p><b>Combien de temps ?</b> Tes données sont supprimées à la fin de l’année scolaire (été 2027), une fois ton dossier déposé sur Pearltrees.</p>
+    <p><b>Tes droits.</b> Tu peux demander à tes professeurs de consulter, corriger ou supprimer tes données.</p></div>`);
+}
+document.addEventListener('click', (e) => { if (e.target.closest('[data-donnees]')) afficherDonnees(); });
+
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); etat.invitationInstall = e; });
 window.addEventListener('hashchange', router);
 
@@ -136,6 +151,7 @@ async function demarrer() {
   }
   majCadre();
   router();
+  envoyerAttente();
 }
 
 demarrer();
