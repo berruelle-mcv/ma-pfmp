@@ -431,3 +431,13 @@ fieldset.attitude legend, fieldset.diapo-edit legend { padding: 0 .35rem; }
 .semaine button.essai b { opacity: .55; }
 .actions-compte { white-space: nowrap; }
 .actions-compte .btn-icone { font-size: 1.05rem; }
+
+/* Carte « Premier jour » (message d'arrivée à envoyer par l'ENT) */
+.carte.arrivee { border-left: 4px solid var(--accent); }
+.carte.arrivee h2 { margin-top: 0; }
+.etapes-arrivee { margin: .25rem 0 .75rem; padding-left: 1.25rem; font-size: .95rem; }
+.etapes-arrivee li { margin-bottom: .35rem; }
+.etapes-arrivee .btn-lien { font-weight: 600; text-align: left; }
+.carte.arrivee textarea { width: 100%; font-size: .9rem; line-height: 1.4; margin-bottom: .75rem; }
+.coche-arrivee { display: flex; align-items: center; gap: .5rem; margin-top: .9rem; font-weight: 600; }
+.coche-arrivee input { width: 1.3rem; height: 1.3rem; }

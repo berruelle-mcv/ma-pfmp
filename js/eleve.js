@@ -89,6 +89,88 @@ function modifierMesDates() {
   f.querySelector('[data-officielles]').addEventListener('click', () => envoyer(null, null));
 }
 
+// Carte « Premier jour » : message de confirmation d'arrivée à envoyer à Mme Berruelle par la messagerie de l'ENT.
+const VIDE = '……………';
+const cleArrivee = (suffixe) => `mapfmp.arrivee.${suffixe}.${(etat.utilisateur && etat.utilisateur.id) || 0}`;
+const lireLocal = (c) => { try { return localStorage.getItem(c); } catch { return null; } };
+const ecrireLocal = (c, v) => { try { v === null ? localStorage.removeItem(c) : localStorage.setItem(c, v); } catch { /* rien */ } };
+
+function messageArrivee(id = {}) {
+  const u = etat.utilisateur;
+  const lieu = [id.denomination, id.adresse].map((x) => String(x || '').trim().replace(/\s*\n\s*/g, ', ')).filter(Boolean).join(', ');
+  return `Bonjour Madame BERRUELLE,
+
+Je vous confirme que je suis présent(e) au sein de mon entreprise d’accueil depuis le ${dateLongue(monStage().debut)}. Je peux être visité(e) à l’adresse suivante :
+${lieu || VIDE}
+
+Mon tuteur (ou ma tutrice) est : Monsieur ou Madame ${String(id.tuteur_nom || '').trim() || VIDE}
+
+Il (elle) est joignable au n° suivant : ${VIDE}
+
+Cordialement,
+
+${String(u.nom || '').toUpperCase()} ${u.prenom || ''}
+${etat.config.pfmp.classe}`;
+}
+const objetArrivee = () => `Confirmation de prise de poste – ${String(etat.utilisateur.nom || '').toUpperCase()} ${etat.utilisateur.prenom || ''}`;
+
+function carteArriveeHtml() {
+  return `<div class="carte arrivee" data-arrivee>
+    <h2>📧 Premier jour : confirme ton arrivée à Mme Berruelle</h2>
+    <ol class="etapes-arrivee">
+      <li>Complète ce qui manque dans le message (les <b>……</b>, souvent le numéro de ton tuteur). À la ligne de ton tuteur, efface « Monsieur » ou « Madame » pour ne garder que le bon mot.</li>
+      <li>Appuie sur <b>📋 Copier le message</b>.</li>
+      <li>Ouvre l’<b>ENT</b> → <b>Messagerie</b> → <b>Nouveau message</b>.</li>
+      <li>Destinataire : tape <b>Berruelle</b> et choisis <b>Mme Berruelle</b>. Objet : <button class="btn-lien" type="button" data-copier-objet>${esc(objetArrivee())}</button> <span class="petit discret">(touche pour le copier)</span></li>
+      <li>Colle le message, puis <b>Envoyer</b>.</li>
+    </ol>
+    <textarea data-message-arrivee rows="14" aria-label="Message à envoyer"></textarea>
+    <button class="btn plein" type="button" data-copier-message>📋 Copier le message</button>
+    <label class="coche-arrivee"><input type="checkbox" data-arrivee-envoye> C’est envoyé à Mme Berruelle</label>
+  </div>`;
+}
+
+async function copier(texte) {
+  try { await navigator.clipboard.writeText(texte); return true; } catch { /* méthode de secours */ }
+  const t = document.createElement('textarea');
+  t.value = texte; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  t.remove();
+  return ok;
+}
+
+function brancherCarteArrivee(vue) {
+  const carte = vue.querySelector('[data-arrivee]');
+  if (!carte) return;
+  const zone = carte.querySelector('[data-message-arrivee]');
+  const brouillon = lireLocal(cleArrivee('brouillon'));
+  zone.value = brouillon || messageArrivee();
+  if (!brouillon) {
+    // Préremplissage avec la fiche d'identité, si l'élève l'a commencée (sans écraser ce qu'il a déjà tapé).
+    get('/eleve/sections/identite').then((s) => {
+      if (!lireLocal(cleArrivee('brouillon')) && s && s.contenu) zone.value = messageArrivee(s.contenu);
+    }).catch(() => {});
+  }
+  zone.addEventListener('input', () => ecrireLocal(cleArrivee('brouillon'), zone.value));
+  carte.querySelector('[data-copier-message]').addEventListener('click', async () => {
+    const ok = await copier(zone.value);
+    if (!ok) { zone.focus(); zone.select(); toast('Copie impossible : sélectionne le texte et copie-le à la main.', 'erreur', 5000); return; }
+    toast(zone.value.includes('……') ? 'Message copié ✓ — attention, il reste des …… à compléter.' : 'Message copié ✓ Colle-le dans la messagerie de l’ENT.', zone.value.includes('……') ? 'erreur' : 'ok', 5000);
+  });
+  carte.querySelector('[data-copier-objet]').addEventListener('click', async () => {
+    toast(await copier(objetArrivee()) ? 'Objet copié ✓' : 'Copie impossible : recopie l’objet à la main.', 'ok');
+  });
+  carte.querySelector('[data-arrivee-envoye]').addEventListener('change', (e) => {
+    if (!e.target.checked) return;
+    ecrireLocal(cleArrivee('envoye'), '1');
+    ecrireLocal(cleArrivee('brouillon'), null);
+    carte.remove();
+    toast('Bravo, Mme Berruelle est prévenue ✓', 'ok');
+  });
+}
+
 export async function accueil(vue) {
   const d = await get('/eleve/accueil');
   const u = etat.utilisateur;
@@ -135,6 +217,7 @@ export async function accueil(vue) {
     <div class="salut"><h1>Bonjour ${esc(u.prenom)} 👋</h1><p>${esc(sousTitre)}</p>
       <p class="petit discret" style="margin:.25rem 0 0">📅 Mon stage : du ${esc(dateLongue(p.debut))} au ${esc(dateLongue(p.fin))} · <button class="btn-lien petit" type="button" data-mes-dates>modifier</button></p></div>
     ${bandeauInstallation()}
+    ${ph === 'pendant' && lireLocal(cleArrivee('envoye')) !== '1' ? carteArriveeHtml() : ''}
     ${blocCommentaires}
     ${carteJournal}
     ${blocEtape}
@@ -146,6 +229,7 @@ export async function accueil(vue) {
       <a class="btn secondaire plein" href="#/journal">Essayer mon journal</a></div>
       <div class="bandeau info"><p>Tu peux déjà commencer ta fiche d’identité si tu connais ton entreprise.</p></div>` : ''}
     <p class="petit" style="text-align:center;margin-top:1.5rem"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>`;
+  brancherCarteArrivee(vue);
 
   vue.addEventListener('click', async (e) => {
     if (e.target.closest('[data-mes-dates]')) { modifierMesDates(); return; }
