@@ -114,8 +114,12 @@ ${etat.config.pfmp.classe}`;
 }
 const objetArrivee = () => `Confirmation de prise de poste – ${String(etat.utilisateur.nom || '').toUpperCase()} ${etat.utilisateur.prenom || ''}`;
 
+// Aperçu pour les professeurs : https://ma-pfmp.fr/?apercu=premier-jour affiche la carte quelle que soit la date.
+const apercuArrivee = () => new URLSearchParams(location.search).get('apercu') === 'premier-jour';
+
 function carteArriveeHtml() {
   return `<div class="carte arrivee" data-arrivee>
+    ${apercuArrivee() ? '<p class="petit discret" style="margin-top:0">👁 Aperçu : les élèves voient cette carte à partir de leur premier jour de stage.</p>' : ''}
     <h2>📧 Premier jour : confirme ton arrivée à Mme Berruelle</h2>
     <ol class="etapes-arrivee">
       <li>Complète ce qui manque dans le message (les <b>……</b>, souvent le numéro de ton tuteur). À la ligne de ton tuteur, efface « Monsieur » ou « Madame » pour ne garder que le bon mot.</li>
@@ -217,7 +221,7 @@ export async function accueil(vue) {
     <div class="salut"><h1>Bonjour ${esc(u.prenom)} 👋</h1><p>${esc(sousTitre)}</p>
       <p class="petit discret" style="margin:.25rem 0 0">📅 Mon stage : du ${esc(dateLongue(p.debut))} au ${esc(dateLongue(p.fin))} · <button class="btn-lien petit" type="button" data-mes-dates>modifier</button></p></div>
     ${bandeauInstallation()}
-    ${ph === 'pendant' && lireLocal(cleArrivee('envoye')) !== '1' ? carteArriveeHtml() : ''}
+    ${(ph === 'pendant' && lireLocal(cleArrivee('envoye')) !== '1') || apercuArrivee() ? carteArriveeHtml() : ''}
     ${blocCommentaires}
     ${carteJournal}
     ${blocEtape}
