@@ -221,6 +221,9 @@ export async function accueil(vue) {
     <div class="salut"><h1>Bonjour ${esc(u.prenom)} 👋</h1><p>${esc(sousTitre)}</p>
       <p class="petit discret" style="margin:.25rem 0 0">📅 Mon stage : du ${esc(dateLongue(p.debut))} au ${esc(dateLongue(p.fin))} · <button class="btn-lien petit" type="button" data-mes-dates>modifier</button></p></div>
     ${bandeauInstallation()}
+    ${ph === 'avant' || (ph === 'pendant' && numSemaine === 1) ? `<div class="carte tuto"><h2 style="margin:0">🎬 Comment utiliser Ma PFMP ?</h2>
+      <p class="petit" style="margin:.4rem 0 .75rem">Toutes les étapes de ton stage et ce qu’on attend de toi, en 6 minutes.</p>
+      <button class="btn secondaire plein" type="button" data-tuto>▶ Regarder le tuto</button></div>` : ''}
     ${(ph === 'pendant' && lireLocal(cleArrivee('envoye')) !== '1') || apercuArrivee() ? carteArriveeHtml() : ''}
     ${blocCommentaires}
     ${carteJournal}
@@ -232,7 +235,7 @@ export async function accueil(vue) {
       <p class="petit" style="margin:.4rem 0 .75rem">Entraîne-toi dès maintenant à noter une activité : avant le ${esc(dateLongue(p.debut))}, c’est un <b>essai</b> qui ne compte pas dans ton dossier.</p>
       <a class="btn secondaire plein" href="#/journal">Essayer mon journal</a></div>
       <div class="bandeau info"><p>Tu peux déjà commencer ta fiche d’identité si tu connais ton entreprise.</p></div>` : ''}
-    <p class="petit" style="text-align:center;margin-top:1.5rem"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>`;
+    <p class="petit" style="text-align:center;margin-top:1.5rem"><button class="btn-lien petit" type="button" data-tuto>🎬 Revoir le tuto</button> · <button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>`;
   brancherCarteArrivee(vue);
 
   vue.addEventListener('click', async (e) => {

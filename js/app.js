@@ -1,6 +1,6 @@
 // Démarrage de Ma PFMP : connexion, navigation entre les écrans.
 import { get, post, definirJeton, aUnJeton, quandSessionExpiree } from './api.js';
-import { $, $$, esc, toast, action, modale } from './ui.js';
+import { $, $$, esc, toast, action, modale, ouvrirTuto } from './ui.js';
 import * as eleve from './eleve.js';
 import * as prof from './prof.js';
 import { envoyerAttente } from './attente.js';
@@ -88,6 +88,7 @@ function afficherConnexion() {
         <span class="aide">Le code donné par ton professeur (les professeurs saisissent leur mot de passe).</span></label>
       <button class="btn plein" type="submit">Se connecter</button>
     </form>
+    <button class="btn secondaire plein" type="button" data-tuto style="margin-bottom:1rem">🎬 Voir le tuto (6 min)</button>
     <p class="discret petit" style="text-align:center">Code perdu ? Demande-en un nouveau à ton professeur.</p>
     <p class="petit" style="text-align:center"><button class="btn-lien petit" type="button" data-donnees>🔒 Données personnelles</button></p>
   </div>`;
@@ -138,7 +139,10 @@ export function afficherDonnees() {
     <p><b>Combien de temps ?</b> Tes données sont conservées pendant ta scolarité au lycée, comme ton portfolio Pearltrees, puis supprimées au plus tard un an après ton bac.</p>
     <p><b>Tes droits.</b> Tu peux demander à tes professeurs de consulter, corriger ou supprimer tes données.</p></div>`);
 }
-document.addEventListener('click', (e) => { if (e.target.closest('[data-donnees]')) afficherDonnees(); });
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-donnees]')) afficherDonnees();
+  if (e.target.closest('[data-tuto]')) ouvrirTuto();
+});
 
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); etat.invitationInstall = e; });
 window.addEventListener('hashchange', router);

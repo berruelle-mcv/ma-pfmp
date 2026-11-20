@@ -99,3 +99,14 @@ export function imprimer(html) {
 }
 
 export const nbMots = (s) => (String(s || '').match(/[\p{L}\p{N}'’-]+/gu) || []).length;
+
+// Tuto vidéo (hébergé avec le site, dans video/). Lecture dans une fenêtre, arrêt à la fermeture.
+export function ouvrirTuto() {
+  const f = modale('🎬 Le tuto Ma PFMP', `<video class="tuto-video" controls playsinline preload="metadata" poster="video/tuto-affiche.jpg" src="video/tuto-ma-pfmp.mp4">
+    Ta version du navigateur ne peut pas lire la vidéo.</video>
+    <p class="petit discret" style="margin:.5rem 0 0">6 minutes · pense à monter le son 🔊 · touche ⛶ pour le plein écran.</p>`);
+  f.el.querySelector('.modale').classList.add('large');
+  const v = f.el.querySelector('video');
+  v.play().catch(() => { /* lecture au toucher */ });
+  return f;
+}

@@ -1,6 +1,6 @@
 // Service worker de Ma PFMP : l'appli s'ouvre même avec un réseau faible.
 // Stratégie « réseau d'abord » : la dernière version publiée est toujours prise quand le réseau répond.
-const CACHE = 'mapfmp-v1.5.2';
+const CACHE = 'mapfmp-v1.5.3';
 const COQUILLE = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/app.js', 'js/api.js', 'js/config.js', 'js/ui.js', 'js/eleve.js', 'js/prof.js', 'js/orga.js', 'js/rubriques.js', 'js/complet.js', 'js/attente.js', 'js/images.js', 'js/pdf.js', 'js/pptx.js', 'icones/logo-lycee.png',
@@ -20,6 +20,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   // Les appels au serveur (api.ma-pfmp.fr) ne passent jamais par le cache.
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  // La vidéo du tuto est lue directement en ligne (trop lourde pour être gardée sur le téléphone).
+  if (url.pathname.includes('/video/')) return;
   e.respondWith(
     fetch(e.request)
       .then((rep) => {

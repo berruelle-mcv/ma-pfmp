@@ -441,3 +441,8 @@ fieldset.attitude legend, fieldset.diapo-edit legend { padding: 0 .35rem; }
 .carte.arrivee textarea { width: 100%; font-size: .9rem; line-height: 1.4; margin-bottom: .75rem; }
 .coche-arrivee { display: flex; align-items: center; gap: .5rem; margin-top: .9rem; font-weight: 600; }
 .coche-arrivee input { width: 1.3rem; height: 1.3rem; }
+
+/* Tuto vidéo */
+.modale.large { max-width: 900px; }
+.tuto-video { width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: #000; display: block; }
+.carte.tuto { border-left: 4px solid var(--primaire); }
